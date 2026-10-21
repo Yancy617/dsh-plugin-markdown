@@ -1,0 +1,7 @@
+# Bundle layer for @yancy617/dsh-plugin-markdown.
+#
+# `insert` adds plugin rows over the profile's existing layers. The row `name`
+# is the package name, so Node resolution finds the installed code.
+- insert:
+    - id: markdown-editor
+      name: '@yancy617/dsh-plugin-markdown'

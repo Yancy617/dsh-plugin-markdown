@@ -1,0 +1,21 @@
+# 公开文档的守门：CI 只校验，不生成。
+#
+# `docs/`（内部源）不进仓库，CI 没有源可以生成；生成发生在本地 pre-commit。
+# 这里守住三件事：白名单齐全、产物没被手改（头注在）、没有夹带敏感样式。
+name: docs-check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: 校验 public-docs
+        run: node scripts/docs-check.mjs

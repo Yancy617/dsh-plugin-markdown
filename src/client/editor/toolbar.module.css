@@ -1,0 +1,95 @@
+/*
+ * 工具栏样式：.toggle、.panel、.findRow。
+ *
+ * 内容
+ * - .toggle：开关的静止 / 悬停 / 按下 / 禁用状态。
+ * - .panel：选中浮窗表面。
+ * - .findRow：查找行入场动画。
+ *
+ * 行为
+ * - 颜色与填充全部来自主题变量；本文件只管位置与状态。
+ * - .toggle 的选择器带 [aria-pressed]，靠属性而不是注入顺序提高优先级。
+ * - .panel 覆盖 MenuSurface 的填充与阴影变量。
+ * - reduced motion 下关闭 .findRow 动画。
+ *
+ * 边界
+ * - 不定义组件结构；类名由 FloatingToolbar / FindBar 使用。
+ *
+ * 相关文件
+ * - FloatingToolbar.tsx、FindBar.tsx。
+ *
+ * 改哪里
+ * - 改开关：.toggle 规则。
+ * - 改浮窗：.panel。
+ * - 改入场：@keyframes findRowIn。
+ */
+
+.toggle[aria-pressed='false'] {
+  min-width: 28px;
+  padding: 0 6px;
+  justify-content: center;
+  color: var(--dsw-alias-label-secondary);
+  background: 0 0;
+}
+
+.toggle[aria-pressed='false']:hover {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.toggle[aria-pressed='true'] {
+  min-width: 28px;
+  padding: 0 6px;
+  justify-content: center;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* Held rather than re-stated, so the pointer resting on a pressed toggle does not
+   appear to change anything. */
+.toggle[aria-pressed='true']:hover {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* A toggle that cannot act: the shell dims the whole control rather than only its
+   label, so the surface stays legible. */
+.toggle[aria-pressed='false']:disabled,
+.toggle[aria-pressed='true']:disabled {
+  cursor: not-allowed;
+  opacity: .4;
+}
+
+/*
+ * 选中浮窗的表面：不透明白填充 + 产品自己的四边 elevation。
+ *
+ * MenuSurface 的 .material 读 --dsw-menu-surface-fill / --dsw-menu-backdrop-filter；
+ * 这里覆盖成白色、去掉 blur（不透明填充下的 blur 看不见）。
+ * 阴影用 --dsw-elevation-prominent：半像素描边覆盖四边 + 20px 全向层。
+ * 描边颜色留在主题默认（--dsw-alias-border-l4），不学 Menu 调亮：这里是不透明白，边是唯一分隔。
+ */
+.panel {
+  --dsw-menu-surface-fill: #fff;
+  --dsw-menu-backdrop-filter: none;
+  box-shadow: var(--dsw-elevation-prominent);
+}
+
+/*
+ * The find row, on the way in. Entry only: the reader opened this, and closing it is them being finished
+ * rather than something to announce.
+ */
+@keyframes findRowIn {
+  from {
+    opacity: 0;
+  }
+}
+
+.findRow {
+  animation: findRowIn .12s var(--ds-ease-in-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .findRow {
+    animation: none;
+  }
+}

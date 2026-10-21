@@ -1,0 +1,1059 @@
+/*
+ * 侧栏外观。
+ *
+ * 内容
+ * - .pathRow / .sectionHeader / .label / .heading / .slot / .field：路径行、分组标题、搜索。
+ * - .rowIcon / .row / .rowWrap / .rowTitle：树行与图标。
+ * - .rowWrap 的悬停 / 选中 / 菜单打开状态。
+ *
+ * 行为
+ * - 颜色、字号来自主题；本文件只负责位置、缩进与状态。
+ * - 搜索展开用 max-width 过渡；标题与操作按钮的延迟列表逐属性对应。
+ * - reduced motion 下关闭动画。
+ * - 行内边距只在左侧，层级缩进走 --dsh-workspace-indent。
+ *
+ * 边界
+ * - 不定义组件结构；类名由 MarkdownWorkbench / FindBar 使用。
+ *
+ * 相关文件
+ * - MarkdownWorkbench.tsx、FindBar.tsx。
+ *
+ * 改哪里
+ * - 改搜索：.slot / .field / .heading。
+ * - 改树行：.row / .rowWrap / .rowIcon。
+ */
+
+/* The root's path, and the settings that act on the whole directory. */
+.pathRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  min-width: 0;
+}
+
+/* A section heading with its controls on the same line. */
+.sectionHeader {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 36px;
+  padding: 0 8px;
+  margin-top: 2px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* A heading standing on its own line: the samples group and the outline. */
+.label {
+  color: var(--dsw-alias-label-tertiary);
+  line-height: 20px;
+  padding: 10px 8px 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/*
+ * The heading the open search displaces. Collapsing to zero width and hiding is
+ * the shell's own treatment: the field takes the whole row while it is up, so the
+ * heading leaves rather than shares. The delay list has one entry per transitioned
+ * property, which holds `visibility` back until the shrink has finished —
+ * otherwise the heading blinks out at the start of an animation it should travel
+ * with.
+ */
+.heading {
+  flex: none;
+  min-width: 0;
+  color: var(--dsw-alias-label-tertiary);
+  line-height: 20px;
+  white-space: nowrap;
+  overflow: hidden;
+  max-width: 100%;
+  margin-right: 0;
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition:
+    max-width .18s var(--ds-ease-in-out),
+    margin-right .18s var(--ds-ease-in-out),
+    opacity .12s var(--ds-ease-in-out),
+    transform .18s var(--ds-ease-in-out),
+    visibility 0s linear;
+}
+
+.heading[data-hidden='true'] {
+  max-width: 0;
+  margin-right: -4px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(-4px);
+  transition-delay: 0s, 0s, 0s, 0s, .18s;
+}
+
+/*
+ * The search slot. `max-width` is the whole animation: collapsed it is exactly one
+ * icon wide and the auto margin carries it to the right edge; expanded it takes
+ * the line, which is what leaves the heading and the create button nowhere to sit.
+ */
+.slot {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  max-width: 28px;
+  margin-left: auto;
+  transition: max-width .18s var(--ds-ease-in-out);
+}
+
+.slot[data-open='true'] {
+  max-width: 100%;
+}
+
+/*
+ * The field: the bordered box itself, not a wrapper around one.
+ *
+ * The open width overhangs the row by two pixels on each side, so the border
+ * reaches the sidebar's own inline inset instead of stopping at the row's padding.
+ * That overhang is what makes the field read as covering the row rather than
+ * sitting inside it.
+ */
+.field {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex: none;
+  width: 100%;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  cursor: text;
+  background: none;
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  color: var(--dsw-alias-label-secondary);
+  transition:
+    width .18s var(--ds-ease-in-out),
+    padding .18s var(--ds-ease-in-out),
+    border-color .18s var(--ds-ease-in-out),
+    background-color .18s var(--ds-ease-in-out);
+}
+
+.field[data-open='true'] {
+  width: calc(100% + 4px);
+  height: 30px;
+  margin-left: -2px;
+  margin-right: -2px;
+  padding: 0 4px 0 0;
+  border: .5px solid var(--dsw-alias-border-l4);
+  border-radius: var(--dsw-radius-md);
+  color: var(--dsw-alias-label-caption);
+}
+
+/*
+ * The shell's own search input: no chrome at all, because the field around it is
+ * the box. The width stays zero in both states — `flex: 1` is what gives it its
+ * share — and the fade is the only thing that changes.
+ */
+.input {
+  flex: 1;
+  width: 0;
+  min-width: 0;
+  opacity: 0;
+  pointer-events: none;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  line-height: 18px;
+  transition: opacity .12s var(--ds-ease-in-out);
+}
+
+.input[data-open='true'] {
+  opacity: 1;
+  pointer-events: auto;
+  margin-left: -2px;
+}
+
+/* The field's text is the primary label token, so the hint is stated a step
+   dimmer or it reads as content. The official search uses tertiary. */
+.input::placeholder {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/*
+ * Every icon control in this panel: the search and close drawn here, and the
+ * settings and create buttons that come from the primitives' `Button`.
+ *
+ * One class rather than one per control. The shell gives its `iconButton`,
+ * `searchButton` and `clearButton` the same resting background, the same hover
+ * fill and the same focus ring, and `Button` supplies the first two but leaves the
+ * browser's default focus ring — sharing the class is what stops the two kinds
+ * drifting apart.
+ */
+.iconButton {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  cursor: pointer;
+  color: var(--dsw-alias-label-secondary);
+  background: 0 0;
+}
+
+/* The search glyph inherits the field's own colour, which is the captioned one
+   while the field is open. */
+.iconButton[data-inherit='true'] {
+  color: inherit;
+}
+
+.iconButton:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* While the field is open the icon is no longer a separate target — the whole
+   field is — so the fill is dropped rather than lighting up a button inside its
+   own field. */
+.iconButton[data-open='true']:hover {
+  background: 0 0;
+}
+
+.iconButton[data-open='true'] {
+  height: 30px;
+}
+
+/* The close control the open field carries at its trailing edge. */
+.clearButton {
+  width: 24px;
+  height: 24px;
+}
+
+/*
+ * The product focus ring, on all four.
+ *
+ * The theme supplies the colour and the width and deliberately never the style,
+ * and the colour is a variable so the pointer-modality rule can make it
+ * transparent by redefining it — naming the variable rather than a colour is what
+ * keeps that working. The offset is component-owned, which is why it is here.
+ */
+.iconButton:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
+}
+
+/*
+ * The buttons sharing the heading's line with the search.
+ *
+ * They step aside while it is open rather than being reflowed: the width collapses
+ * first, and visibility is held back until that has finished. The shell moves this
+ * one outward and the heading the other way, so the two retreat from the middle
+ * the field is opening into.
+ */
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  overflow: hidden;
+  max-width: 60px;
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition:
+    max-width .18s var(--ds-ease-in-out),
+    opacity .12s var(--ds-ease-in-out),
+    transform .18s var(--ds-ease-in-out),
+    visibility 0s linear;
+}
+
+.actions[data-hidden='true'] {
+  max-width: 0;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translate(4px);
+  transition-delay: 0s, 0s, 0s, .18s;
+}
+
+/*
+ * One result file's name, above its matched lines.
+ *
+ * This was deleted as an unused class and it was not unused — the same declarations were written inline at the
+ * single place that needed them, which made the class the copy nothing referenced. Restored, and the inline
+ * style now points here.
+ */
+.resultFile {
+  padding: 4px 4px 2px;
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--dsw-alias-label-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/*
+ * The panel's primary action, for the state where nothing is authorized yet.
+ *
+ * Every value is from `dsh-client-ui-sidebar`'s `newSession` rule, so this sits at the same height, radius and
+ * fill as the button directly above it in the rail. A plugin drawing its own differently-sized control beside
+ * an official one reads as "not part of the product".
+ *
+ * A plain button, and no hover. It was a `Button` with these same declarations inline, which overrode the
+ * primitive's hover fill — the control answered nothing. The rule it copies has no hover either, so its absence
+ * here is a match rather than a casualty.
+ */
+.primaryAction {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 38px;
+  width: calc(100% - 4px);
+  margin: 0 2px 12px;
+  padding: 8px 12px;
+  border: .5px solid var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-button-elevated-fill);
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 22px;
+  cursor: pointer;
+  overflow: hidden;
+  position: relative;
+}
+
+/* What the primitive was providing for free. Its own disabled rule is `opacity: .4` and this cursor. */
+.primaryAction:disabled {
+  cursor: not-allowed;
+  opacity: .4;
+}
+
+/* A line of search state: what is being searched, or that nothing matched. */
+.status {
+  color: var(--dsw-alias-label-tertiary);
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+/*
+ * The name prompt's inline refusal.
+ *
+ * One sentence under the field, in the error token rather than the label grey: it is the one
+ * place in this panel where the colour is doing semantic work rather than decoration.
+ */
+.promptError {
+  margin-top: 6px;
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+/* The matched line's number, ahead of its text. */
+.lineNumber {
+  margin-right: 6px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/*
+ * A tree row, quoted from the shell's workspace list — `ui-workspace`'s
+ * `Rows.module.css`, which is the list this one sits beside:
+ *
+ *   .projectRow, .sessionRow {
+ *     border-radius: var(--dsw-radius-md);
+ *     padding: 0 8px;
+ *     padding-inline-start: calc(8px + var(--dsh-workspace-indent, 0px));
+ *     gap: 6px; align-items: center;
+ *     color: var(--dsw-alias-label-primary); user-select: none }
+ *   .projectRow { height: 34px }   .sessionRow { height: 32px }
+ *
+ * The row is a fixed height rather than padding-shaped, indentation arrives as a
+ * custom property instead of a per-row style, and the height is
+ * the list's own rhythm rather than something this file chose.
+ */
+.row {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  /* The wrapper is the row's box now, so the label takes what is left of it beside
+     the ⋯ — and `min-width: 0` is what lets a long name ellipsise inside that share
+     instead of pushing the button past the panel's edge. */
+  flex: 1;
+  min-width: 0;
+  /* No padding of its own: the start inset is stated once, at the end of this file,
+     and the end inset belongs to the wrapper, which has to cover the ⋯ as well. */
+  padding: 0;
+  border: none;
+  border-radius: var(--dsw-radius-md);
+  background: 0 0;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* A folder takes the project row's height, a document the session row's. */
+.rowFolder { height: 34px }
+.rowFile { height: 32px }
+
+/*
+ * The row's box: the label, and — under the pointer or with its menu open — the ⋯.
+ *
+ * The surface lives here rather than on `.row` because the ⋯ is that button's
+ * **sibling, not its child**. A `button` inside a `button` is invalid HTML, and its
+ * click would open the document as well as the menu, so the label keeps a box of its
+ * own inside this one and the fill belongs to the box that holds both.
+ *
+ *   Rows.module.css (ui-workspace):
+ *     .projectRow, .sessionRow { border-radius: var(--dsw-radius-md); padding: 0 8px;
+ *       gap: 6px; align-items: center; display: flex }
+ *
+ * The 8px at the end is the row's own inset, moved out of `.row` so that it also
+ * covers the actions: with the ⋯ hidden, a name still ends on exactly the pixel it
+ * always did.
+ */
+.rowWrap {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding-inline-end: 8px;
+  border-radius: var(--dsw-radius-md);
+  cursor: pointer;
+}
+
+/*
+ * The ⋯'s slot: nothing at rest, one button while the pointer is on the row or while
+ * that row's menu is open.
+ *
+ *   .rowActions { flex: none; align-items: center; gap: 10px; display: none }
+ *   .projectRow:hover .rowActions, .sessionRow:hover .rowActions,
+ *   .projectRow.menuOpen .rowActions, .sessionRow.menuOpen .rowActions {
+ *     display: inline-flex }
+ *
+ * `display`, not `opacity`: the button is not in the layout at all until it appears,
+ * which is why a name that fills its row re-ellipsises when the pointer arrives. The
+ * shell pays the same cost and hides it one row over — its session rows drop the time
+ * and the pin while hovered — and this tree's rows carry no trailing metadata to give
+ * up. `gap: 10px` is the rule's own: it is the space between several action buttons,
+ * and today there is one.
+ *
+ * Official gates only the `menuOpen` half of that reveal behind `@media (hover:hover)`.
+ * That half is not copied: on a device with no hover the ⋯ cannot be revealed at all,
+ * so the gate would change nothing anyone can reach.
+ */
+.rowActions {
+  display: none;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+}
+
+.rowWrap:hover .rowActions,
+.rowWrap[data-menu-open='true'] .rowActions {
+  display: inline-flex;
+}
+
+/*
+ * The ⋯, which is the shell's row icon button:
+ *
+ *   .iconButton { border-radius: var(--dsw-radius-xs); cursor: pointer; width: 16px;
+ *     height: 16px; color: var(--dsw-alias-label-tertiary); background: 0 0;
+ *     border: none; flex: none; justify-content: center; align-items: center;
+ *     padding: 0; display: inline-flex }
+ *   .iconButton:hover { color: var(--dsw-alias-label-primary) }
+ *
+ * 16px and no fill of its own: the row's hover fill is already behind it, so the
+ * button answers the pointer by darkening its three dots rather than by stacking a
+ * second surface on the first.
+ */
+.rowMore {
+  box-sizing: border-box;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: var(--dsw-radius-xs);
+  background: 0 0;
+  cursor: pointer;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.rowMore:hover {
+  color: var(--dsw-alias-label-primary);
+}
+
+/*
+ * Where a carried row would land.
+ *
+ * The line is the shell's own, copied value for value out of `Rows.module.css`:
+ *
+ *   .sessionRow.dropBefore:before, .sessionRow.dropAfter:after {
+ *     content: ""; z-index: 1; pointer-events: none; height: 12px; position: absolute;
+ *     left: 0; right: 4px; background: … }
+ *   .sessionRow.dropBefore:before { top: -7px }   .sessionRow.dropAfter:after { bottom: -7px }
+ *
+ * Two 5×7 gradients draw the arrow head and a 2px bar draws the line, all in
+ * `--dsw-alias-state-business-primary`. It sits on a pseudo-element, so the marker costs no
+ * layout: the rows do not move when it appears, which is the whole reason it can be drawn
+ * across the 2px gap between them.
+ *
+ * `left: 0` is the shell's too — the line spans the entire row, indent included, so every
+ * layer's line begins in the same place, at the panel's edge. Narrowing it to the row's own
+ * text is a change worth making by eye, later.
+ */
+.rowWrap.rowDropBefore,
+.rowWrap.rowDropAfter {
+  position: relative;
+}
+
+.rowWrap.rowDropBefore::before,
+.rowWrap.rowDropAfter::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 4px;
+  height: 12px;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    linear-gradient(55deg, transparent calc(50% - 1px), var(--dsw-alias-state-business-primary) calc(50% - 1px) calc(50% + 1px), transparent calc(50% + 1px)) 0 0 / 5px 7px no-repeat,
+    linear-gradient(125deg, transparent calc(50% - 1px), var(--dsw-alias-state-business-primary) calc(50% - 1px) calc(50% + 1px), transparent calc(50% + 1px)) 0 5px / 5px 7px no-repeat,
+    linear-gradient(var(--dsw-alias-state-business-primary) 0 0) 4px 5px / calc(100% - 4px) 2px no-repeat;
+}
+
+.rowWrap.rowDropBefore::before { top: -7px }
+.rowWrap.rowDropAfter::after { bottom: -7px }
+
+/*
+ * The middle band of a folder: "into me".
+ *
+ * There is no official mark to copy here — the shell's list has no drop target for an empty or
+ * collapsed group — so this is the plugin's own, and it is deliberately the **same blue as the
+ * line**: the two marks answer the same question ("where would this land"), and a writer who has
+ * just seen the line should recognise the fill without learning a second colour.
+ *
+ * Not a solid fill: the row's text stays the theme's own label colour, so the blue is mixed down
+ * to a tint of `--dsw-alias-state-business-primary` rather than used at full strength (which is a
+ * *state* colour, meant for small marks). The plain row fill stays first in the rule so a browser
+ * that cannot mix colours still shows that the row is the target.
+ */
+.rowWrap.rowDropInto {
+  background: var(--dsw-alias-interactive-bg-hover);
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 18%, transparent);
+}
+
+/*
+ * The leading glyph, in a fixed box.
+ *
+ *   .slot { width: 16px; height: 20px; color: var(--dsw-alias-label-tertiary);
+ *           flex: none; display: inline-flex; justify-content: center; align-items: center }
+ *
+ * A fixed box is what keeps a folder's glyph and its name in the same place on every row.
+ *
+ * **A document row has no slot at all** — an empty slot would exist only for alignment,
+ * and the 16px it added made every document's name look like a child of the row above it.
+ * A folder's name follows its glyph; a document's name starts where that glyph starts.
+ */
+.rowIcon {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  width: 16px;
+  height: 20px;
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/*
+ * An **open** folder's glyph is the official blue.
+ *
+ * Read out of the packed app, not from memory — the picker's selected row is the one place the
+ * official UI draws a folder in colour:
+ *
+ *   .Fv-y6W_rowIconSelected { color: var(--dsw-alias-button-info-fill); flex: none }
+ *   --dsw-alias-button-info-fill: var(--dsw-static-deepseek-500);
+ *   --dsw-static-deepseek-500: #4176e6              (rgb(65, 118, 230))
+ *
+ * The alias token rather than the literal, so the theme keeps owning the value — light and dark
+ * each define it.
+ *
+ * **The meaning is borrowed, not copied.** Officially that blue says "this row is the current
+ * one"; here it says "this folder is open". The writer asked for it that way, and being open is
+ * the one state a folder row has that a document row cannot. Closed folders stay on the grey
+ * every row shares.
+ */
+.rowIconOpen {
+  color: var(--dsw-alias-button-info-fill);
+}
+
+/*
+ * The folder glyph carries no colour of its own.
+ *
+ * It inherits `.rowIcon`'s `--dsw-alias-label-tertiary`, so folders and files sit on the
+ * same grey — which is what `ui-sidebar-files` does, the one official list that holds
+ * both and opens its folders:
+ *
+ *   .icon { color: var(--dsw-alias-label-tertiary) }
+ *
+ * The directory picker is not a reference for this. Read out of the asar:
+ *
+ *   selected ? <IconFolderOpenRegular size={16} className={rowIconSelected} />
+ *            : <IconFolderCloseRegular size={16} className={rowIcon} />
+ *
+ * Its open folder is the *selected* one, drawn in `--dsw-alias-button-info-fill` — a
+ * blue. The only grey folder it has is closed. Quoting its `.rowIcon` as "the grey open
+ * folder" was a reading error, and it cost two rounds.
+ *
+ * One class, one glyph, and the glyph is the state — the pair `ui-sidebar-files` and the
+ * workspace both draw:
+ *
+ *   expanded ? <IconFolderOpenRegular …/> : <IconFolderCloseRegular …/>
+ *
+ * There is no hover state and no arrow any more: a folder is open or it is closed, and the
+ * icon says which. The hover-to-arrow affordance this plugin borrowed from the directory
+ * picker (`:hover` swaps the glyph for a chevron that turns with the state) was the third
+ * and fourth states of a two-state thing, and the writer asked for it to go.
+ */
+
+/*
+ * The name, with the shell's own treatment for one too long for its cell:
+ *
+ *   .title { text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+ *            font-size: 14px; line-height: 20px; overflow: hidden }
+ *
+ * 14px over 20px, not the secondary content size: the workspace list keeps its row
+ * names at the base size and steps only the text under them down.
+ */
+.rowTitle {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 20px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/*
+ * A document **inside a folder** lines up under that folder's name.
+ *
+ * A folder row puts 22px before its name (16px glyph + the row's own 6px gap); a nested level
+ * steps in by 18px, the shell's own step (`depth * 18` in the component, quoted there from
+ * `.level .level { padding-left: 18px }`). So without this, a child document sits 4px left of
+ * its parent's name — measured, and asked for by the writer, who wants the child *under* the
+ * name it belongs to.
+ *
+ * `calc(22px - 18px)` rather than `4px`: the two numbers are the reason, and a reader who
+ * changes either of them sees what has to move.
+ *
+ * **Nesting is the test, not a depth flag.** The level elements are nested — a child level is
+ * rendered inside its parent's — so `.level .level` means "in some folder", and the root level,
+ * which is inside nothing, is untouched: there a document belongs on the same left edge as the
+ * folders' glyphs, and it stays there. No `depth > 0` anywhere, and the component did not have
+ * to learn anything.
+ *
+ * A `margin` and not a padding: the 16px start inset is declared once for every row in this
+ * file, on purpose, and this rule has no business restating it.
+ */
+.level .level .rowFile .rowTitle {
+  margin-inline-start: calc(22px - 18px);
+}
+
+/*
+ * 下部-右's own heading, fixed.
+ *
+ * `flex: none` so the scrolling body below it cannot take its height. It is what names the
+ * column, and a column whose name scrolls away stops being labelled.
+ */
+/*
+ * The outline column, and the control that replaces its heading while it is folded.
+ *
+ * The width is a variable rather than an inline `flex` because a transition has to own it: an inline
+ * `flex` outranks the stylesheet, so the animation would never run. Folding sets the variable to zero;
+ * `outlineWidth` — the writer's own choice, made by dragging — is not touched.
+ *
+ * `overflow: hidden` stops a zero-width column spilling its heading and rows across the editor, and it
+ * clips the resize handle with them — which is why the width cannot be changed while folded.
+ */
+.outlineColumn {
+  flex: 0 0 var(--dsh-outline-width, 0px);
+  overflow: hidden;
+  transition: flex-basis .18s var(--ds-ease-in-out);
+}
+
+.foldedToggle {
+  opacity: 0;
+  pointer-events: none;
+  /* .12s, matching the sidebar's own fade: a fade reads as finished sooner than a resize does, and
+     the shell fades its heading at that speed while moving it at .18s. */
+  transition: opacity .12s var(--ds-ease-in-out);
+}
+
+.foldedToggle[data-shown='true'] {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.outlineHead {
+  /* The top padding is read, not written: the folded outline's control is offset by the same value,
+     and the two states must put it on one pixel. */
+  padding: var(--dsh-outline-head-pad) var(--dsh-outline-inset) 0;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/*
+ * The headings, and the only part of the outline that scrolls.
+ *
+ * `flex: 1` for the height the heading does not use, and `min-height: 0` so that height can
+ * be less than the content's — without it a flex item refuses to go below its content and
+ * the overflow never happens.
+ */
+/*
+ * The outline's heading text.
+ *
+ * No padding of its own: the row states the inset, because the row also places the control that folds
+ * the column, and both have to land on the pixel the folded state uses. The colour and line-height
+ * repeat the sidebar's heading on purpose — they share a look and differ in who owns the inset.
+ */
+.outlineHeadText {
+  flex: none;
+  min-width: 0;
+  color: var(--dsw-alias-label-tertiary);
+  line-height: 20px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.outlineBody {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-height: 0;
+  /* Horizontal padding lives on the rows: anything here would inset the scroll region and take the
+     scrollbar off the container's edge with it. The bottom inset does not affect that, so it can
+     stay. */
+  padding-block-end: 10px;
+  overflow-y: auto;
+  /* It scrolls; it just does not say so. The shell sizes every bar from this variable, so setting it
+     to nothing here hides this one and leaves every other panel's alone — the same way the shell's
+     own sidebar quiets its bars by overriding `--dsh-scrollbar-thumb` instead of restyling the
+     pseudo-element. */
+  --dsh-scrollbar-width: 0px;
+  scrollbar-width: none;
+}
+
+/*
+ * One row of the outline.
+ *
+ * `flex: none` because the aside is a flex column with `overflow-y: auto`: a flex item
+ * shrinks by default, so enough headings compressed the rows to fit instead of
+ * overflowing, and the scrollbar never appeared. The container is the thing that scrolls;
+ * the content is the thing that has to overflow.
+ */
+.outlineRow {
+  flex: none;
+}
+
+/*
+ * One heading in the outline.
+ *
+ * One line, ellipsised. Wrapping was the alternative and it is the wrong one here: a
+ * heading is a signpost, and two lines of it stop the column reading as a list of
+ * headings. A name too long for the panel is a name the panel cannot show — the editor
+ * is where it is read in full.
+ */
+.outlineLabel {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/*
+ * The row the reader is in.
+ *
+ * The colour is the product's own "this row is current" blue — the alias the official directory
+ * picker paints its selected row with, and the same one the file tree's open-folder icon uses
+ * (`--dsw-alias-button-info-fill` → `--dsw-static-deepseek-500`). It is a **token**, not a literal:
+ * light and dark each define it, and a theme change carries the highlight with it.
+ *
+ * On the label, not on the row: a `Button`'s own colour belongs to the platform component, and
+ * overriding it would be a specificity guess. A child's colour always wins over what it inherits.
+ * No background and no left bar — the rows already carry 12px indentation steps, and a second
+ * signal in the same direction makes the column read as a tree that it is not.
+ */
+.outlineRowActive .outlineLabel {
+  color: var(--dsw-alias-button-info-fill);
+}
+
+/*
+ * The divider between the editor and the outline, which is also the handle that moves it.
+ *
+ * Wide enough to grab and quiet enough to ignore: it is transparent at rest and takes the
+ * shell's hover fill under the pointer or the keyboard, the same token the shell's own
+ * controls use. The half-pixel line stays on the outline's own edge, so the resting panel
+ * looks exactly as it did before there was a handle at all.
+ */
+/*
+ * The outline's grab strip.
+ *
+ * Inside the container, so which side of the line it is on is the outline's own business rather
+ * than an accident of sibling order — and floating, so it costs the layout nothing and the rows
+ * are not moved aside to make room for it.
+ *
+ * It draws nothing. The cursor says the edge can be dragged, and saying it a second time put a grey
+ * band on a panel whose edge is already a line. With nothing drawn there is no "visible half", so
+ * the width is simply how much pointer target there is.
+ *
+ * Focus is still visible: the shell's global `focus.css` draws a ring for `:focus-visible` on
+ * everything, this separator included. That is the platform's indication, not a mark chosen here.
+ */
+.outlineHandle {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 10px;
+  cursor: col-resize;
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+}
+
+/*
+ * The file tree, and the only part of the panel that scrolls.
+ *
+ * `flex: 1` takes the height the path row and the 文档区 row do not, and `min-height: 0` is
+ * what lets that be less than the content's — without it a flex item refuses to go below its
+ * content and the overflow never happens, which is how the outline's rows came to be
+ * squashed instead of scrolled.
+ */
+.treeBody {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/*
+ * Scrollbars appear when the pointer is over their region, and not before.
+ *
+ * The mechanism is the shell's own. `ui-sidebar` does not style `::-webkit-scrollbar` per
+ * panel; it overrides the two custom properties the theme's global scrollbar sheet reads:
+ *
+ *   .root.quietBars {
+ *     --dsh-scrollbar-thumb: transparent;
+ *     --dsh-scrollbar-thumb-hover: transparent }
+ *
+ * The shell lifts that on a linger timer after a scroll ends. This reveals on hover instead —
+ * the same two properties, set back to what that sheet itself defaults to:
+ *
+ *   scrollbar.css  body { --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l1);
+ *                         --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l1) }
+ *
+ * `transparent` rather than a narrower track or `display: none`: the track keeps its width, so
+ * revealing the bar never shifts the text beside it. That is why the shell expresses this as a
+ * colour at all.
+ *
+ * Each selector names a region rather than the whole plugin, so hovering one panel does not
+ * light up another. The editor's own scroller belongs to the editor component and is not
+ * styled here, but custom properties inherit — its pane covers it.
+ *
+ * The outline is deliberately absent. It has no bar at all — it sets `--dsh-scrollbar-width` to
+ * nothing — so a quiet rule and a reveal rule for it would be two ways of colouring something
+ * that is not drawn. Its bar is stated once, where it is hidden.
+ */
+.treeBody,
+.workspace {
+  --dsh-scrollbar-thumb: transparent;
+  --dsh-scrollbar-thumb-hover: transparent;
+}
+
+.treeBody:hover,
+.workspace:hover {
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l1);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l1);
+}
+
+/*
+ * Nothing is open.
+ *
+ * The whole panel, and one line of text in the middle of it. There is nothing else to arrange: the
+ * bands above this in the document branch do not exist here, so there is no leftover padding, no
+ * zero-height strip and no border to suppress — which is what a rule per hidden band would have
+ * needed, and what would have gone stale the first time one of those bands changed.
+ *
+ * The colour is the shell's secondary label rather than the primary: this is guidance, not content.
+ */
+.emptyState {
+  display: grid;
+  place-items: center;
+  flex: 1;
+  min-height: 0;
+  padding: 24px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 14px;
+  line-height: 20px;
+  text-align: center;
+}
+
+/*
+ * The two marks a document can carry: every occurrence of what is being looked for, and the one
+ * currently being looked at.
+ *
+ * The colour is this plugin's own. Nothing official uses the Custom Highlight API — a check across
+ * all 53 shell packages found no use of it and no ::selection rule — so there is no token to quote.
+ * When the shell has one, this becomes a reference and the literals go.
+ *
+ * These live in this sheet because it is the plugin's always-injected one; a sheet of their own
+ * would have to be imported purely for its side effect, and a side-effect-only import is the kind of
+ * thing a bundler is entitled to drop.
+ */
+::highlight(dsh-markdown-search-current),
+::highlight(dsh-markdown-find-current) {
+  background-color: #ff9800;
+  color: #1a1a1a;
+}
+
+::highlight(dsh-markdown-search-others),
+::highlight(dsh-markdown-find-others) {
+  background-color: #ffff00;
+  color: #1a1a1a;
+}
+
+/* One level of the tree: the shell's list rhythm, 2px between sibling rows. */
+.level {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/*
+ * One horizontal inset for every row in this panel.
+ *
+ * The path row, the section heading and every tree row state it here, once, instead
+ * of each carrying its own `padding: … 8px`. Three independent declarations that
+ * happen to agree today are three declarations that can drift tomorrow, and a
+ * one-pixel disagreement between a heading and the list under it reads as "off"
+ * without anyone being able to say why.
+ *
+ * This rule sits after the three it governs, so it decides. The level indent is the
+ * only thing that ever adds to it, which is what puts a depth-0 tree row exactly where
+ * the heading above it starts.
+ *
+ * 16px: the column's own horizontal padding is gone, so the same pixel is written once.
+ */
+.pathRow,
+.sectionHeader,
+.row {
+  /* `padding-inline-start`, never `padding-inline`: the indent is a left edge only.
+     Setting both would add the level depth to the right padding as well, and a row two
+     levels down would lose 36px of its own width to a margin nobody asked for. */
+  padding-inline-start: calc(16px + var(--dsh-workspace-indent, 0px));
+}
+
+/*
+ * The two header rows end at the panel's own inset; a tree row keeps its 8px.
+ *
+ *   .sectionHeader { padding-left: 4px; margin-right: -4px }
+ *
+ * The shell pulls its header *out* past the list gutter, and the reason is the shape
+ * of an icon button: a 28px control centres its glyph, so a button sitting on the same
+ * inset as a row's text reads as indented — the eye sees the glyph, not the box. These
+ * two rows therefore take no right padding of their own and end where the panel's
+ * inset ends, while a tree row keeps 8px for its text — on `.rowWrap` now, so that the
+ * same 8px also stands between the ⋯ and the panel's edge.
+ *
+ * 两个标题行不设右 padding，结束在面板内缩处；树行保留 8px（在 `.rowWrap` 上），
+ * 同一个 8px 也站在 ⋯ 与面板边之间。
+ */
+.pathRow,
+.sectionHeader {
+  padding-inline-end: 8px;
+}
+
+/*
+ * The document currently open in the tree — and the row whose ⋯ menu is open.
+ *
+ * Quoted from the shell's conversation list — the row treatment this tree copies:
+ *
+ *   .projectRow:hover, .sessionRow:hover, .sessionRow.selected,
+ *   .projectRow.menuOpen, .sessionRow.menuOpen {
+ *     background: var(--dsw-alias-interactive-bg-hover)
+ *   }
+ *
+ * Hover, selection and an open row menu are one fill there: no ring, no label
+ * change. That restraint is the whole of why it reads as comfortable, and it is
+ * what this rule now states. All four selectors name the row's *box* (`.rowWrap`):
+ * the fill has to sit behind the ⋯ as well as behind the name.
+ *
+ * The open-menu half is `data-menu-open`, the truth of which is the component's
+ * `rowMenu` state — the row itself is what knows, and the sheet only states what an
+ * open row looks like. That is also why it needs no `:has()` and no second element.
+ *
+ * 选中 / 悬停 / 菜单打开共用同一个 hover 填充：无描边、无字重变化。
+ */
+.rowWrap:hover,
+.rowWrap[data-menu-open='true'],
+.rowSelected,
+.rowSelected:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/*
+ * Reduced motion. The reference requires transitions to respect the setting, and
+ * this is the only place it can be honoured: a `transition` written inline
+ * outranks this rule, which is why the four transitions above were moved out of
+ * the component.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .heading,
+  .slot,
+  .field,
+  .input,
+  .actions {
+    transition: none;
+  }
+}
+
+/*
+ * Reduced motion, for the two transitions above. They live in this file rather than inline precisely so
+ * this can reach them; a transition that ignores the setting is invisible to whoever needs it, and
+ * would be the only one here that does.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .outlineColumn,
+  .foldedToggle {
+    transition: none;
+  }
+}

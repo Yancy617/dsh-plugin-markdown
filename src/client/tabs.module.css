@@ -1,0 +1,209 @@
+/*
+ * 打开的文档标签条。
+ *
+ * 内容
+ * - .wrapper / .strip / .tabs / .tab / .tab[data-active]。
+ * - .label / .label > svg / .globe / .text / .close。
+ *
+ * 行为
+ * - 标签条 28px 高，chip 80–170 宽、10px 内边距、8px 圆角、无 font-weight。
+ * - 标签间距 6px；条本身保留自己的 padding。
+ * - 标题行 1.4 行高（官方 `.tabTitle`），图标 flex:none，网页标签的地球 14px 且留 4px 外边距。
+ * - 滚动容器隐藏滚动条。
+ * - 选中标签用 --dsw-alias-markdown-tag 填充。
+ *
+ * 边界
+ * - 不定义标签行为；只提供外观。
+ *
+ * 相关文件
+ * - MarkdownWorkbench.tsx。
+ *
+ * 改哪里
+ * - 改条：.strip / .tabs。
+ * - 改 chip：.tab。
+ */
+
+/*
+ * Holds a tab and its separator, so the key can sit on one element. `display: contents` is the shell's own
+ * way of doing this — see its `.session` — and it keeps the wrapper out of the layout entirely.
+ */
+.wrapper {
+  display: contents;
+}
+
+.strip {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  /*
+   * 官方标签条里两个 chip 之间夹着一个 10px 的 _slot_，chip margin 为 0；
+   * 这里 strip 的 padding 保留自己的几何（官方为 0，因为它待在自带内边距的面板里）。
+   */
+  gap: 10px;
+  height: 28px;
+  padding: 10px 6px 0 10px;
+  overflow: hidden;
+}
+
+/*
+ * The part that scrolls. The shell hides the bar and fades the two ends with a mask driven by the scroll
+ * position; the fading is not implemented yet, so the bar is simply hidden.
+ */
+.tabs {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  min-width: 0;
+  /*
+   * 间距写在这一层：chip 是 .tabs 的子元素（.strip 只装 .tabs）。
+   * 6px 是用户定的；官方是 10px（两个 chip 之间夹一个 _slot_）。
+   */
+  gap: 6px;
+  overflow: auto hidden;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+/*
+ * A tab is the surface; the label inside it is the control. From the shell: 28px tall, 80 to 170 wide,
+ * a 10px inline inset.
+ *
+ * **The label keeps its own 13px instead of the shell's secondary content size.** The tab bar is
+ * chrome, not text to read: the reader's font-size setting is about the document, and letting it grow
+ * the strip reflows the panel for something that is not the document. The file tree made the same
+ * call (`sidebar.module.css`: fixed 14px, no `--dsh-content-font-size-secondary`).
+ */
+.tab {
+  position: relative;
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  min-width: 80px;
+  max-width: 170px;
+  height: 28px;
+  padding: 0 10px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+  /* 官方 chip 的圆角是 8px，逐值照抄。 */
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+/*
+ * The selected fill is the shell's own for this: `--dsw-alias-markdown-tag`. It is a deeper surface than
+ * the row hover this file used before, which is what lets the selected tab be told apart from a hovered
+ * one — and there is no `font-weight`, because the shell's tabs have none.
+ */
+.tab[data-active='true'] {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-markdown-tag);
+}
+
+.tab:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.tab[data-active='true']:hover {
+  background: var(--dsw-alias-markdown-tag);
+}
+
+/* The icon and the name, sharing one flex line with the shell's 5px between them. */
+.label {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 5px;
+  align-items: center;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  /*
+   * 官方标签的标题行（dockkit 的 `.tabTitle`）是 `line-height:1.4`，不是 `.tab` 的 1。
+   * 这一行不能省：`.text` 要 `overflow:hidden` 才出省略号，而 13px 的行盒装不下 13px 字号的
+   * 上下沿 —— 实测 `example.com/py` 的下伸部被切掉 1.7px；1.4 时行盒 18.2px，墨迹整块在盒内。
+   * 要写在 `font` 之后：`font: inherit` 是简写，会把行高一起继承回去（= `.tab` 的 1）。
+   */
+  line-height: 1.4;
+  color: inherit;
+  cursor: pointer;
+}
+
+/*
+ * 图标不许被压窄。svg 根自带 `overflow:hidden`，于是它在 flex 里的自动最小尺寸是 0，
+ * 标题一长就按比例缩 —— 实测 16px 的地球被压成 11.79px（看上去比同排的文档图标小一号）。
+ * 官方的 `.titleIcon` 就是一句 `flex:none`。
+ */
+.label > svg {
+  flex: none;
+}
+
+/*
+ * 网页标签那颗地球：官方图标本身就默认 14px（`GlobeOutlineArtwork` 的 `size = 14`），
+ * 而浏览器标签的 `.titleIcon` 还带 4px 右外边距 —— 与 `.label` 的 5px 间距叠加共 9px。
+ */
+.globe {
+  margin-right: 4px;
+}
+
+/*
+ * While the close control is showing, the name fades over its last 30 pixels rather than ending early. A
+ * padding would be a number that has to match the control's width plus its offsets; a mask is the shape of
+ * the space itself.
+ */
+.tab:hover .label,
+.tab:focus-within .label,
+.tab[data-active='true'] .label {
+  mask-image: linear-gradient(to right, black calc(100% - 30px), transparent calc(100% - 14px));
+}
+
+.text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/*
+ * The close control, off to the side rather than in the row: absolute, 20 square, 4 from the top and right,
+ * and invisible until the tab is hovered, focused or selected. While it is hidden it costs no width, which is
+ * the whole reason it is not a flex item.
+ *
+ * The name does not stop short of it; it fades. See the mask below.
+ */
+.close {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tab:hover .close,
+.tab:focus-within .close,
+.tab[data-active='true'] .close {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.close:hover {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+

@@ -1,0 +1,61 @@
+#!/bin/sh
+# 发布闸：git push 必须经人确认。
+#
+# 为什么需要它：这个仓库的模型是"本地 git 是主，GitHub 是发布快照"——
+# push 是一个**事件**，不是习惯。而公开仓库的东西推上去就撤不干净了，
+# 所以半成品被手滑推上去的代价，比多问一次高得多。
+#
+# 判据：环境变量 DSH_PUSH_CONFIRMED 必须恰好等于 yes-by-human。
+# 这不是安全机制（本机代码想绕过总有办法：--no-verify，或直接改这个文件），
+# 它是**纪律的机械落点**：把"我问了、人说了"变成一次显式动作，
+# 而不是靠"我记得好像说过"。
+#
+# 规矩与流程见 docs/发布与同步.md。
+#
+# 放行（人明确说了"推"之后）：
+#   DSH_PUSH_CONFIRMED=yes-by-human git push
+# PowerShell 里：
+#   $env:DSH_PUSH_CONFIRMED='yes-by-human'; git push
+
+if [ "$DSH_PUSH_CONFIRMED" = "yes-by-human" ]; then
+  echo "[push 闸] 已确认，放行。"
+  exit 0
+fi
+
+echo ""
+echo "=============================================================="
+echo " [push 闸] 这次推送被拦下了：没有人的确认。"
+echo "=============================================================="
+echo ""
+echo "要推上去的提交（远端还没有的）："
+echo ""
+
+# 从 stdin 读 git 送进来的 "<本地 ref> <本地 sha> <远端 ref> <远端 sha>"
+while read -r local_ref local_sha remote_ref remote_sha; do
+  if [ "$local_sha" = "0000000000000000000000000000000000000000" ]; then
+    echo "  （删除远端分支 $remote_ref）"
+    continue
+  fi
+  if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
+    # 远端还没有这个分支：列出本地有、远端没有的那些提交
+    git log --oneline --no-decorate "$local_sha" --not --remotes 2>/dev/null | sed 's/^/  /'
+    echo "  （远端尚无 $remote_ref，以上是本地独有）"
+  else
+    git log --oneline --no-decorate "$remote_sha..$local_sha" 2>/dev/null | sed 's/^/  /'
+  fi
+done
+
+echo ""
+echo "先问人。得到明确确认之后再执行："
+echo ""
+echo "    DSH_PUSH_CONFIRMED=yes-by-human git push"
+echo ""
+echo "规则（不许绕）："
+echo "  - 这个变量只有人点头之后才该设上。agent 不许自己决定推，也不许用"
+echo "    --no-verify 绕过这道闸（那样做等于把规矩当摆设）。"
+echo "  - 人只说“发 npm”不等于允许推 GitHub —— 两件事默认各自独立。"
+echo "  - 完整手册（探网络、hosts 绕法、失败与对策）见 docs/Git操作手册.md 第二节。"
+echo ""
+echo "（如果这次推送本来就是不该发生的，那这道闸已经起作用了。）"
+echo ""
+exit 1

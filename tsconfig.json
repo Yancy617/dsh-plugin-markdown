@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    // 客户端代码**一个全局都不注入**（不给 `node`、不给 `dom` 的 node 类型）——`process` 在这里
+    // 出现就是错。这一份只收客户端与共享代码。
+    "types": []
+  },
+  // **探针不在这一份里**，它有一份自己的：`tsconfig.scripts.json`（那里 `types: ["node"]`，
+  // 因为它跑在 Node 里）。分成两份而不是合起来，就是不让 Node 的全局漏进客户端
+  // ——`pnpm typecheck` 把三份都跑一遍（§6.153：从前只跑两份，探针**根本没被检查过**）。
+  "include": ["src/client/**/*.ts", "src/client/**/*.tsx", "src/shared/**/*.ts"]
+}

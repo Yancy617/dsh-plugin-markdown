@@ -1,0 +1,26 @@
+# 行尾策略：仓库里永远存 LF，任何平台克隆出来都是 LF。
+#
+# 为什么这个项目需要它：这个插件的对错判据是**逐字节**（打开-保存往返不许变一个
+# 字节），而探针里写死的期望值用的是 `\n`。Windows 上 git 的默认配置
+# （PortableGit 的 `core.autocrlf=true`）会在克隆时把文本文件全换成 CRLF，
+# 在那种工作区里改完再提交，CRLF 就会被原样写回仓库 —— 历史里的行尾从此不一致。
+# 这条把它钉死，不依赖任何人的本机 git 配置。
+#
+# 证据：`docs/审计-GFM覆盖-实测.md` 的逐字节断言、`scripts/probe-units.ts` 的
+# "保存稳定性"一组、以及 `docs/方案-空段落保真.md` 的口径都按 LF 写。
+* text=auto eol=lf
+
+# 二进制：明确声明"别碰"。少了这几行，一张 .jpg 在换行尾的那一套里可能被当成文本。
+*.jpg binary
+*.jpeg binary
+*.png binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.tgz binary
+
+# 上游规范正文是**逐字副本**，任何自动转换都是破坏。它自己的说明在
+# `reference/README.md` 顶部，正文一个字都不许改。
+reference/CommonMark-0.31.2-spec.txt -text

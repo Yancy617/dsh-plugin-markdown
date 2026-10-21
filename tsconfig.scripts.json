@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    // 探针跑在 Node 里（`process.argv` / `process.exit`），所以这一份要 Node 的类型。
+    // 单独一份而不是塞进 `tsconfig.json`：那一份是**客户端**的（`types: []`，一个全局都不注入），
+    // 把 Node 的全局塞进去会让"这里能不能用 `process`"在客户端代码里也变成"能"。
+    "types": ["node"]
+  },
+  "include": ["scripts/**/*.ts", "scripts/**/*.tsx"]
+}

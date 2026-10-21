@@ -1,0 +1,18 @@
+#!/bin/sh
+# 公开文档闸：备份 → 生成 → 暂存 → 校验。
+#
+# 为什么放在 pre-commit 而不是 CI：`docs/` 不进 git，CI 没有源，生成不了。
+# 所以"公开文档是否最新"只能在本地保证；CI 那边只剩校验（见 .github/workflows/docs-check.yml）。
+#
+# 规矩：公开哪几份、怎么脱敏、链接怎么改，都在 scripts/docs-config.mjs。
+# 内部文档在 docs/（不进 git），备份由 docs-backup.mjs 写到仓库外。
+
+set -e
+
+if [ -d docs ]; then
+  node scripts/docs-backup.mjs --if-changed
+  node scripts/docs-public.mjs
+  git add public-docs
+fi
+
+node scripts/docs-check.mjs

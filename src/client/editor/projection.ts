@@ -28,7 +28,6 @@ import { topLevelSpans } from './sourceMap'
 import { sameTree, standardizeContent } from './standardize'
 import { $createSourceBlockNode } from './sourceBlock'
 import { $isRawBlockNode } from './rawBlocks'
-import { $isDefinitionNode } from './definitions'
 
 /**
  * 树里有没有“只能原样回放”的节点。
@@ -130,7 +129,6 @@ export function projectDocumentNodes(
       child.position?.start.offset !== undefined &&
       span.start < child.position.start.offset
     if (
-      $isDefinitionNode(node) ||
       containsRaw(node) ||
       hasComplexReference(child) ||
       hasIndentedCode(child, source) ||

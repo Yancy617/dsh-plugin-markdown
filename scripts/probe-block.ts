@@ -332,6 +332,23 @@ function occurrences(text: string, needle: string): number {
   check('松列表：投影成 source 块', $isSourceBlockNode(first))
 }
 
+// 1j. 定义行：投影成可编辑 source，改后仍按引用式保存。
+{
+  const source = '[a]: /x\n\n[a]\n'
+  const { editor, base } = openDocument(source)
+  const first = editor.getEditorState().read(() => $getRoot().getFirstChild())
+  check('定义行：投影成 source 块', $isSourceBlockNode(first))
+  editor.update(
+    () => {
+      const node = $getRoot().getFirstChild()
+      if ($isSourceBlockNode(node)) node.setRaw('[a]: /y')
+    },
+    { discrete: true },
+  )
+  const saved = saveWith(editor, source, base)
+  check('定义行：改 source 后保存新地址', saved.includes('[a]: /y') && saved.includes('[a]'), JSON.stringify(saved))
+}
+
 // 1i. HTML 块：投影成 source，仍可改、保存不多字节。
 {
   const source = '<div>\nfoo\n</div>\n'

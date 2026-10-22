@@ -17,7 +17,7 @@
  *
  * 相关文件
  * - 被依赖：MarkdownEditor.tsx、mdastLower.ts、mdastLift.ts。
- * - 依赖：RuleNode / image / rawBlocks / rawInline / definitions。
+ * - 依赖：RuleNode / image / rawBlocks / rawInline / blockBreak / sourceBlock。
  *
  * 改哪里
  * - 新增节点：EDITOR_NODES + 对应 lower / lift 分支。
@@ -33,7 +33,6 @@ import { RuleNode } from './RuleNode'
 import { ImageNode } from './image'
 import { RawBlockNode } from './rawBlocks'
 import { RawInlineNode } from './rawInline'
-import { DEFINITION_NODE } from './definitions'
 import { MdBlockBreakNode } from './blockBreak'
 import { SourceBlockNode } from './sourceBlock'
 
@@ -53,8 +52,6 @@ export const EDITOR_NODES: ReadonlyArray<Klass<LexicalNode>> = [
   TableNode,
   TableRowNode,
   TableCellNode,
-  // 链接定义的载体：不可见、块级，保住定义那一行的原文直到它被改。
-  DEFINITION_NODE,
   // 块间分隔：只存在于模型里，阻止相邻同类列表被 Lexical 合并；不写文件。
   MdBlockBreakNode,
   // 可编辑的普通文本 source 块：不能无损建模的构造按源文本显示，仍然可编辑。

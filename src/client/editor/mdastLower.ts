@@ -10,10 +10,11 @@
  *   图片 alt / 地址 / 标题、原始 HTML、定义行。
  * - 格式位：strong / emphasis / delete / inlineCode 摊到文字节点上。
  * - 引用式链接 / 图片在读取时解析成普通链接 / 图片，并把引用式身份记在节点上
- *   （`referenceForm.ts`），写回时保住作者写的形式；定义块仍留在树里。
+ *   （`referenceForm.ts`），写回时保住作者写的形式；定义行建可编辑 SourceBlockNode。
  * - 定义收集走整棵 mdast 树：CommonMark §4.7 规定定义影响整篇，不只是它所在的容器。
  * - 软换行是 LineBreakNode（默认），硬换行是 LineBreakNode + hardBreakState。
- * - 认不出的块 / 行内建原样载体（只读），不解释、不改字节。
+ * - 认不出的块 / 行内建原样载体（RawBlock / RawInline）；projection 会把块级原样载体变成可编辑
+ *   source，行内仍按文字显示，不解释、不改字节。
  *
  * 边界
  * - 不解析 Markdown（mdastParse.ts），不做保存（blockSave.ts / mdastLift.ts）。
@@ -67,7 +68,7 @@ import { $createRuleNode } from './RuleNode'
 import { $createImageNode } from './image'
 import { $createRawBlockNode } from './rawBlocks'
 import { $createRawInlineNode } from './rawInline'
-import { $createDefinitionNode } from './definitions'
+import { $createSourceBlockNode } from './sourceBlock'
 import { $setReferenceForm } from './referenceForm'
 import { $setCodeMeta } from './codeMeta'
 import { $setTaskListForm } from './taskListForm'
@@ -170,9 +171,11 @@ function lowerBlock(node: RootContent, ctx: Context): LexicalNode | null {
     case 'html':
       return $createRawBlockNode(node.value, 'html')
     case 'definition':
-      return $createDefinitionNode(slice(node, ctx))
+      // 定义行也是正文的一部分：显示成可编辑 source，不藏起来。
+      return $createSourceBlockNode(slice(node, ctx))
     default:
-      // 脚注、YAML / TOML、认不出的扩展：按原文保留，只读。
+      // 脚注、YAML / TOML、认不出的扩展：先原样装进 RawBlock；projection 会把它转成
+      // 可编辑的 source 块（普通文本）。
       return $createRawBlockNode(slice(node, ctx), node.type)
   }
 }

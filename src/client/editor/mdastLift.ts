@@ -4,7 +4,8 @@
  * 内容
  * - liftBlock(node)：一个顶层块 ⇒ mdast 的 BlockContent。
  * - liftInline(node)：一个行内节点 ⇒ mdast 的 PhrasingContent（可能是一层格式包装）。
- * - serializeBlock(node)：BlockContent ⇒ 标准 Markdown（mdast-util-to-markdown + GFM）。
+ * - serializeLexicalBlock(node)：一个顶层节点 ⇒ 标准 Markdown；source 块原样写。
+ * - serializeSource(raw)：source 块原文。
  *
  * 行为
  * - 只表达**语义**：不再保留源里的拼写（`-` / `*`、Setext、缩进代码、实体、转义）。
@@ -12,15 +13,15 @@
  * - 文字节点的格式位折成 strong / emphasis / delete / inlineCode；不支持的格式（下划线、颜色）丢弃。
  * - 引用式链接 / 图片若在节点上带着引用式身份（`referenceForm.ts`），写回 `[...][label]` /
  *   `![...][label]`；没有身份才写成普通链接 / 图片。
- * - 定义行按原文解析成 mdast 的 definition；解析不出来就按 HTML 原样保留。
+ * - 定义行 / source 块原样写；定义行由 mdastLower 直接建 SourceBlockNode。
  *
  * 边界
  * - 不判断“这个块有没有变”（那由 blockSave.ts 拿本文件写出的那一串去比）与保存策略（blockSave.ts）。
  * - 不解析 Markdown（mdastParse.ts）。
  *
  * 相关文件
- * - 依赖：各节点类、mdastParse.ts、mdast-util-to-markdown、mdast-util-gfm。
- * - 被依赖：blockSave.ts。
+ * - 依赖：各节点类、sourceBlock.ts、serialize.ts。
+ * - 被依赖：blockSave.ts、documentMarkdown.ts、clipboardMarkdown.ts、projection.ts。
  *
  * 改哪里
  * - 新增节点类型：liftBlock / liftInline 各加一支。
@@ -59,7 +60,6 @@ import type {
   BlockContent,
   Code,
   Content,
-  Definition,
   Heading,
   Image,
   ImageReference,
@@ -79,7 +79,6 @@ import { $isRuleNode } from './RuleNode'
 import { $isImageNode, type ImageNode } from './image'
 import { $isRawBlockNode } from './rawBlocks'
 import { $isRawInlineNode } from './rawInline'
-import { $isDefinitionNode } from './definitions'
 import { $isSourceBlockNode } from './sourceBlock'
 import { $referenceFormOf } from './referenceForm'
 import { $codeMetaOf } from './codeMeta'
@@ -141,7 +140,6 @@ export function liftBlock(node: LexicalNode): Content {
   if ($isTableNode(node)) return liftTable(node)
   if ($isRuleNode(node)) return { type: 'thematicBreak' }
   if ($isRawBlockNode(node)) return { type: 'html', value: node.getRaw() }
-  if ($isDefinitionNode(node)) return liftDefinition(node.getText())
   if ($isImageNode(node)) {
     // 图片在顶层时也包成段落，mdast 的 image 是行内的。
     return { type: 'paragraph', children: [liftImage(node)] }
@@ -460,17 +458,6 @@ export function serializeLexicalBlock(node: LexicalNode, options?: BlockWriteOpt
 }
 
 /**
- * 定义行：按原文再解析一次；解析不出 definition 就按 HTML 原样写。
- * @param raw - 定义那一行的原文。
- * @returns mdast 块。
- */
-function liftDefinition(raw: string): Content {
-  const parsed = parseBody(raw).children[0]
-  if (parsed !== undefined && parsed.type === 'definition') return parsed as Definition
-  return { type: 'html', value: raw }
-}
-
-/**
  * 哪些节点在列表项里算“块”。
  * @param node - 候选。
  * @returns 是不是块。
@@ -484,7 +471,6 @@ function isBlockNode(node: LexicalNode): boolean {
     $isHeadingNode(node) ||
     $isRuleNode(node) ||
     $isRawBlockNode(node) ||
-    $isSourceBlockNode(node) ||
-    $isDefinitionNode(node)
+    $isSourceBlockNode(node)
   )
 }

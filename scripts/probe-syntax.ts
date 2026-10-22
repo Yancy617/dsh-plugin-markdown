@@ -38,7 +38,7 @@ import {
   serializeDocumentMarkdown,
 } from '../src/client/editor/documentMarkdown'
 import { $saveBody } from '../src/client/editor/blockSave'
-import { parseBody } from '../src/client/editor/mdastParse'
+import { parseBody } from '../src/client/editor/core/mdastParse'
 import type { BaseBlock } from '../src/client/editor/saveBase'
 
 const SPEC = fileURLToPath(new URL('../reference/CommonMark-0.31.2-spec.txt', import.meta.url))

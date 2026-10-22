@@ -74,7 +74,7 @@ import { $setCodeMeta } from './codeMeta'
 import { $setTaskListForm } from './taskListForm'
 import { hardBreakState } from './hardBreak'
 import { tableAlignmentsState, type Alignment } from './tableModel'
-import { parseBody } from './mdastParse'
+import { parseBody } from './core/mdastParse'
 
 /** 一次映射需要的外部事实。 */
 interface Context {

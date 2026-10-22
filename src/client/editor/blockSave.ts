@@ -41,9 +41,9 @@ import {
   serializeLexicalBlock,
   listWriteOptions,
 } from './mdastLift'
-import { serializeBlock, type BlockWriteOptions } from './serialize'
-import { parseBody } from './mdastParse'
-import { topLevelSpans } from './sourceMap'
+import { serializeBlock, type BlockWriteOptions } from './core/serialize'
+import { parseBody } from './core/mdastParse'
+import { topLevelSpans } from './core/sourceMap'
 import type { BaseBlock } from './saveBase'
 
 /**

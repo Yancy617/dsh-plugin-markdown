@@ -24,8 +24,8 @@
 import { type LexicalNode } from 'lexical'
 import type { Content, Root, RootContent } from 'mdast'
 import { liftBlock } from './mdastLift'
-import { topLevelSpans } from './sourceMap'
-import { sameTree, standardizeContent } from './standardize'
+import { topLevelSpans } from './core/sourceMap'
+import { sameTree, standardizeContent } from './core/standardize'
 import { $createSourceBlockNode } from './sourceBlock'
 import { $isRawBlockNode } from './rawBlocks'
 

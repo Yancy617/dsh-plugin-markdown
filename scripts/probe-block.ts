@@ -59,7 +59,7 @@ import { $insertLink, $writeLink } from '../src/client/editor/linkEdit'
 import { registerListIndent } from '../src/client/editor/listNesting'
 import { $selectedImageKeys, registerImageKeys } from '../src/client/editor/imageSelection'
 import { applyBlockOperation, NESTING_OPERATIONS } from '../src/client/editor/operations'
-import { parseBody } from '../src/client/editor/mdastParse'
+import { parseBody } from '../src/client/editor/core/mdastParse'
 import { $isSourceBlockNode, SOURCE_EDIT_TAG } from '../src/client/editor/sourceBlock'
 
 function makeEditor(): LexicalEditor {

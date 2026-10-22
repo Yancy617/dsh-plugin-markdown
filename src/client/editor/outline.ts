@@ -5,7 +5,7 @@
  * - OutlineEntry、outlineOf、inlineText。
  *
  * 行为
- * - 从 Markdown 文本读，而且是**交给语法层读**（`./mdastParse.ts` 的 `parseBody`，与导入正文同一套
+ * - 从 Markdown 文本读，而且是**交给语法层读**（`./core/mdastParse.ts` 的 `parseBody`，与导入正文同一套
  *   解析器）：ATX、Setext、引用里的标题、列表项里的标题、围栏里的 `#`，全由结构决定，不再按行猜。
  * - frontmatter 是元数据、编辑区一个字都不渲染，整块跳过（旧的按行读会把里面的 `#` 列成标题）。
  * - 标题文字取行内节点的文字：`# **粗** 体` ⇒ `粗 体`，与编辑区里看到的一致；换行压成一个空格。
@@ -26,7 +26,7 @@
  */
 import type { Nodes as MdastNode } from 'mdast'
 import { splitFrontmatter } from './frontmatter'
-import { parseBody } from './mdastParse'
+import { parseBody } from './core/mdastParse'
 
 /** One heading in the document. */
 export interface OutlineEntry {

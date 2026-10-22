@@ -54,8 +54,8 @@ import {
   type TableNode,
 } from '@lexical/table'
 import { $isCodeNode } from '@lexical/code-core'
-import { serializeBlock, serializeRoot } from './serialize'
-import type { BlockWriteOptions } from './serialize'
+import { serializeBlock, serializeRoot } from './core/serialize'
+import type { BlockWriteOptions } from './core/serialize'
 import type {
   BlockContent,
   Code,
@@ -84,7 +84,7 @@ import { $referenceFormOf } from './referenceForm'
 import { $codeMetaOf } from './codeMeta'
 import { $taskListFormOf } from './taskListForm'
 import { tableAlignmentsState, type Alignment } from './tableModel'
-import { parseBody } from './mdastParse'
+import { parseBody } from './core/mdastParse'
 import { isHardBreak } from './hardBreak'
 
 export { serializeBlock, serializeRoot }

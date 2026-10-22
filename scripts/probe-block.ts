@@ -60,7 +60,7 @@ import { registerListIndent } from '../src/client/editor/listNesting'
 import { $selectedImageKeys, registerImageKeys } from '../src/client/editor/imageSelection'
 import { applyBlockOperation, NESTING_OPERATIONS } from '../src/client/editor/operations'
 import { parseBody } from '../src/client/editor/core/mdastParse'
-import { $isSourceBlockNode, SOURCE_EDIT_TAG } from '../src/client/editor/sourceBlock'
+import { $isSourceBlockNode, $splitSourceBlock, SOURCE_EDIT_TAG } from '../src/client/editor/sourceBlock'
 
 function makeEditor(): LexicalEditor {
   return createHeadlessEditor({
@@ -364,6 +364,32 @@ function occurrences(text: string, needle: string): number {
   )
   const saved = saveWith(editor, source, base)
   check('HTML 块：改 source 后保存仍标准', saved.includes('bar'), JSON.stringify(saved))
+}
+
+// 1i2. 多块 source 失焦拆分后保存：旧基线对不上新 key，也不能丢块。
+{
+  const source = '<div>\nfoo\n</div>\n'
+  const { editor, base } = openDocument(source)
+  editor.update(
+    () => {
+      const node = $getRoot().getFirstChild()
+      if ($isSourceBlockNode(node)) node.setRaw('<div>\nfoo\n</div>\n\nbar')
+    },
+    { discrete: true },
+  )
+  editor.update(
+    () => {
+      const node = $getRoot().getFirstChild()
+      if ($isSourceBlockNode(node)) $splitSourceBlock(node)
+    },
+    { discrete: true },
+  )
+  const saved = saveWith(editor, source, base)
+  check(
+    '多块 source 拆分后保存不丢块',
+    saved.includes('foo') && saved.includes('bar'),
+    JSON.stringify(saved),
+  )
 }
 
 // 2. 改一段里的一个字。

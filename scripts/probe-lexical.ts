@@ -36,6 +36,7 @@ import { $createBlockBreakNode } from '../src/client/editor/blockBreak'
 import {
   $createSourceBlockNode,
   $isSourceBlockNode,
+  $splitSourceBlock,
   SOURCE_EDIT_TAG,
 } from '../src/client/editor/sourceBlock'
 
@@ -144,6 +145,29 @@ function listOf(text: string): ReturnType<typeof $createListNode> {
   editor.getEditorState().read(() => {
     const node = $getRoot().getFirstChild()
     check('L3 source 块可改 raw 并带 tag', $isSourceBlockNode(node) && node.getRaw() === 'b' && tagged)
+  })
+}
+
+// L4：多块 source 失焦拆分，每段仍是 source，原文不丢。
+{
+  const editor = makeEditor()
+  editor.update(
+    () => {
+      $getRoot().append($createSourceBlockNode('a\n\nb'))
+    },
+    { discrete: true },
+  )
+  editor.update(
+    () => {
+      const node = $getRoot().getFirstChild()
+      if ($isSourceBlockNode(node)) $splitSourceBlock(node)
+    },
+    { discrete: true },
+  )
+  editor.getEditorState().read(() => {
+    const children = $getRoot().getChildren()
+    const raws = children.map(child => ($isSourceBlockNode(child) ? child.getRaw() : ''))
+    check('L4 多块 source 失焦拆分', raws.length === 2 && raws[0] === 'a' && raws[1] === 'b', raws.join('|'))
   })
 }
 

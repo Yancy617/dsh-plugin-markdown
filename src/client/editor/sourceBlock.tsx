@@ -4,25 +4,27 @@
  * 内容
  * - SourceBlockNode：块级、可编辑、多行的源文本载体。
  * - $createSourceBlockNode / $isSourceBlockNode / $setSourceText。
+ * - $splitSourceBlock：失焦时把多块源文本拆成多个 source 块。
  * - SourceBlockEditor：节点在编辑器里的 textarea 视图。
  *
  * 行为
  * - 显示原文，保留换行；用户可以在 textarea 里改任何字，改动写回节点。
- * - 保存时由 mdastLift.ts 把源文本重新解析成 mdast 块；解析出来是标准 Markdown，
- *   由统一写手重写；解析不出来就退回纯文本段落。
+ * - 保存时由 mdastLift.ts 原样写回；source 文本本身就是 Markdown，不重拼。
+ * - 失焦时若源文本能解析出多个顶层块，拆成多个 source 块；解析不出 / 只有一块则不动。
  * - 不参与富文本格式、不进 Lexical 的 text selection；textarea 自带输入与撤销。
  *
  * 边界
  * - 不判断“这块该不该 source”（那是 projection 的事）。
- * - 不解析 Markdown、不写文件。
+ * - 只做“拆”，不把 source 重新解释成 rich（projection 的事）。
  *
  * 相关文件
  * - 被依赖：config.ts（注册）、documentMarkdown.ts（projection）、mdastLift.ts（写回）。
- * - 依赖：lexical 的 DecoratorNode、React。
+ * - 依赖：lexical 的 DecoratorNode、React、core/mdastParse、core/sourceMap。
  *
  * 改哪里
  * - 改节点：SourceBlockNode。
  * - 改编辑视图：SourceBlockEditor。
+ * - 改拆分：$splitSourceBlock。
  */
 import {
   $addUpdateTag,
@@ -35,6 +37,8 @@ import {
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
 import { useLexicalEditable } from '@lexical/react/useLexicalEditable'
 import type { JSX } from 'react'
+import { parseBody } from './core/mdastParse'
+import { topLevelSpans } from './core/sourceMap'
 
 /** 序列化形状：一块源文本。 */
 export type SerializedSourceBlockNode = {
@@ -140,6 +144,37 @@ export class SourceBlockNode extends DecoratorNode<JSX.Element> {
 }
 
 /**
+ * 把一段多块源文本拆成多个 source 块。
+ *
+ * 只做“拆”：每段仍是原样的 source；不尝试重新解释成 rich。
+ * @param node - 当前 source 块。
+ * @returns 是否拆了。
+ */
+export function $splitSourceBlock(node: SourceBlockNode): boolean {
+  const raw = node.getRaw()
+  let parsed
+  try {
+    parsed = parseBody(raw)
+  } catch {
+    return false
+  }
+  if (parsed.children.length <= 1) return false
+  const spans = topLevelSpans(parsed.children, raw)
+  const pieces: SourceBlockNode[] = []
+  for (let index = 0; index < parsed.children.length; index += 1) {
+    const span = spans[index]
+    if (span === undefined) return false
+    pieces.push($createSourceBlockNode(raw.slice(span.start, span.end)))
+  }
+  const parent = node.getParent()
+  if (parent === null) return false
+  const at = node.getIndexWithinParent()
+  parent.splice(at, 1, pieces)
+  $addUpdateTag(SOURCE_EDIT_TAG)
+  return true
+}
+
+/**
  * 源文本的编辑视图。
  * @param props.nodeKey - 节点 key。
  * @param props.raw - 当前源文本。
@@ -163,6 +198,16 @@ function SourceBlockEditor({ nodeKey, raw }: { readonly nodeKey: NodeKey; readon
           () => {
             const node = $getNodeByKey(nodeKey)
             if ($isSourceBlockNode(node)) node.setRaw(value)
+          },
+          { discrete: true },
+        )
+      }}
+      onBlur={() => {
+        if (!editable) return
+        editor.update(
+          () => {
+            const node = $getNodeByKey(nodeKey)
+            if ($isSourceBlockNode(node)) $splitSourceBlock(node)
           },
           { discrete: true },
         )

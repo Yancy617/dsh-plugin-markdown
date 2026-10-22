@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 块级保存：未改的顶层块从原文切片，改过的块用 mdast 标准写。
  *
  * 内容
@@ -37,14 +37,19 @@ import { $isListNode } from '@lexical/list'
 import type { Content, Root } from 'mdast'
 import { $isEmptyParagraph } from './emptyParagraph'
 import { $isBlockBreakNode } from './blockBreak'
-import { serializeBlock, serializeLexicalBlock, listWriteOptions, type BlockWriteOptions } from './mdastLift'
+import {
+  serializeLexicalBlock,
+  listWriteOptions,
+} from './mdastLift'
+import { serializeBlock, type BlockWriteOptions } from './serialize'
 import { parseBody } from './mdastParse'
 import { topLevelSpans } from './sourceMap'
 import type { BaseBlock } from './saveBase'
 
 /**
  * 这个块的“标准写法”。
- * 写手抛错时退回纯文本段落，保证保存路径不会因为语法抛给用户。
+ * source 原样写；rich 走写手；写手抛错时退回纯文本段落。
+ * 保存路径因此不会因为语法把错误抛给用户。
  * @param node - 顶层块。
  * @param options - 相邻列表的标记覆盖。
  * @returns 由写手给出的那一串 Markdown（不含末尾换行）。

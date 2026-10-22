@@ -23,74 +23,12 @@
  */
 import { type LexicalNode } from 'lexical'
 import type { Content, Root, RootContent } from 'mdast'
-import { liftBlock, serializeBlock } from './mdastLift'
-import { parseBody } from './mdastParse'
+import { liftBlock } from './mdastLift'
 import { topLevelSpans } from './sourceMap'
+import { sameTree, standardizeContent } from './standardize'
 import { $createSourceBlockNode } from './sourceBlock'
 import { $isRawBlockNode } from './rawBlocks'
 import { $isDefinitionNode } from './definitions'
-
-/**
- * 去掉位置、label 这类“写法”字段后的形状。
- * @param value - mdast 节点或数组。
- * @returns 可比较的形状。
- */
-function comparable(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(item => comparable(item))
-  if (typeof value !== 'object' || value === null) return value
-  const record = value as Record<string, unknown>
-  const out: Record<string, unknown> = {}
-  for (const [key, child] of Object.entries(record)) {
-    if (key === 'position' || key === 'label') continue
-    if (child === null || child === undefined) continue
-    out[key] = comparable(child)
-  }
-  if (Array.isArray(out.children)) {
-    const merged: unknown[] = []
-    for (const child of out.children) {
-      const previous = merged[merged.length - 1]
-      const childRecord = child as Record<string, unknown> | null
-      const previousRecord = previous as Record<string, unknown> | null
-      if (
-        childRecord !== null &&
-        previousRecord !== null &&
-        childRecord?.type === 'text' &&
-        previousRecord?.type === 'text' &&
-        typeof childRecord.value === 'string' &&
-        typeof previousRecord.value === 'string'
-      ) {
-        previousRecord.value = `${previousRecord.value}${childRecord.value}`
-      } else {
-        merged.push(child)
-      }
-    }
-    out.children = merged
-  }
-  return out
-}
-
-/**
- * 键名排序后的形状；JSON.stringify 的顺序因此稳定。
- * @param value - comparable 的结果。
- * @returns 稳定形状。
- */
-function stable(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(item => stable(item))
-  if (typeof value !== 'object' || value === null) return value
-  const record = value as Record<string, unknown>
-  const out: Record<string, unknown> = {}
-  for (const key of Object.keys(record).sort()) out[key] = stable(record[key])
-  return out
-}
-
-/**
- * @param left - lift 出来的块。
- * @param right - mdast 块。
- * @returns 两者是否同构。
- */
-function sameBlock(left: Content, right: RootContent): boolean {
-  return JSON.stringify(stable(comparable(left))) === JSON.stringify(stable(comparable(right)))
-}
 
 /**
  * 树里有没有“只能原样回放”的节点。
@@ -202,13 +140,10 @@ export function projectDocumentNodes(
     } else {
       try {
         const lifted = liftBlock(node)
-        sourceBlock = !sameBlock(lifted, child)
+        sourceBlock = !sameTree(lifted, child)
         // 引用式链接要带着整篇定义才有意义；单块重解会把它读成文字，不能拿它当写手判据。
         if (!sourceBlock && !hasReference(child)) {
-          const written = serializeBlock(lifted)
-          const reparsed = parseBody(written).children[0]
-          sourceBlock =
-            reparsed === undefined || !sameBlock(reparsed, child)
+          sourceBlock = standardizeContent(lifted) === null
         }
       } catch {
         sourceBlock = true

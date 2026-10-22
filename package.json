@@ -58,8 +58,9 @@
     "probe:block": "tsdown --config tsdown.block.config.ts && node _probe/probe-block.mjs",
     "probe:units": "tsdown --config tsdown.block.config.ts && node _probe/probe-units.mjs",
     "probe:syntax": "tsdown --config tsdown.block.config.ts && node _probe/probe-syntax.mjs",
+    "probe:lexical": "tsdown --config tsdown.block.config.ts && node _probe/probe-lexical.mjs",
     "pretest": "tsdown",
-    "test": "tsdown --config tsdown.block.config.ts && node _probe/probe-block.mjs && node _probe/probe-units.mjs && node _probe/probe-syntax.mjs && node scripts/docs-check.mjs",
+    "test": "tsdown --config tsdown.block.config.ts && node _probe/probe-block.mjs && node _probe/probe-units.mjs && node _probe/probe-syntax.mjs && node _probe/probe-lexical.mjs && node scripts/docs-check.mjs",
     "prepack": "tsdown"
   },
   "license": "MIT",

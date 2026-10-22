@@ -24,7 +24,7 @@
  *
  * 改哪里
  * - 新增节点类型：liftBlock / liftInline 各加一支。
- * - 改标准写法：SERIALIZE_OPTIONS。
+ * - 改标准写法：serialize.ts 的 SERIALIZE_OPTIONS（本文件只再导出）。
  */
 import {
   $getState,
@@ -53,8 +53,8 @@ import {
   type TableNode,
 } from '@lexical/table'
 import { $isCodeNode } from '@lexical/code-core'
-import { toMarkdown, type Options as ToMarkdownOptions } from 'mdast-util-to-markdown'
-import { gfmToMarkdown } from 'mdast-util-gfm'
+import { serializeBlock, serializeRoot } from './serialize'
+import type { BlockWriteOptions } from './serialize'
 import type {
   BlockContent,
   Code,
@@ -70,7 +70,6 @@ import type {
   ListItem,
   Paragraph,
   PhrasingContent,
-  Root,
   Table,
   TableCell,
   TableRow,
@@ -89,11 +88,8 @@ import { tableAlignmentsState, type Alignment } from './tableModel'
 import { parseBody } from './mdastParse'
 import { isHardBreak } from './hardBreak'
 
-/** 逐块写时可覆盖的列表标记；根级写手不需要。 */
-export interface BlockWriteOptions {
-  readonly bullet?: ToMarkdownOptions['bullet']
-  readonly bulletOrdered?: ToMarkdownOptions['bulletOrdered']
-}
+export { serializeBlock, serializeRoot }
+export type { BlockWriteOptions }
 
 /**
  * 相邻两张同类列表要换一个标记，否则逐块写手写 `-` + `-`，重解会并成一张。
@@ -111,16 +107,6 @@ export function listWriteOptions(
   if (type === 'bullet') return { bullet: '*' }
   if (type === 'number') return { bulletOrdered: ')' }
   return undefined
-}
-
-/** 标准 GFM 的写出选项；一次定死，所有改过的块共用。 */
-const SERIALIZE_OPTIONS: ToMarkdownOptions = {
-  bullet: '-',
-  emphasis: '*',
-  strong: '*',
-  fence: '`',
-  rule: '-',
-  extensions: [gfmToMarkdown()],
 }
 
 /**
@@ -463,18 +449,6 @@ export function liftNodeBlocks(node: LexicalNode): Content[] {
 }
 
 /**
- * 一个 mdast 根 ⇒ 标准 Markdown。
- *
- * 根级写手知道“相邻列表要用不同标记”，所以相邻的两张列表不会被重解合并；
- * 逐块写手不知道上下文，只能用于单块。
- * @param root - mdast 根。
- * @returns 标准 Markdown，不含末尾换行。
- */
-export function serializeRoot(root: Root): string {
-  return toMarkdown(root, SERIALIZE_OPTIONS).replace(/\n$/, '')
-}
-
-/**
  * 一个顶层 Lexical 节点 ⇒ 标准 Markdown（source 块按完整片段写）。
  * @param node - 顶层节点。
  * @param options - 逐块写时覆盖的列表标记。
@@ -513,14 +487,4 @@ function isBlockNode(node: LexicalNode): boolean {
     $isSourceBlockNode(node) ||
     $isDefinitionNode(node)
   )
-}
-
-/**
- * 一个块 ⇒ 标准 Markdown。
- * @param node - mdast 块。
- * @param options - 逐块写时覆盖的列表标记。
- * @returns 不带末尾换行的 Markdown 文本。
- */
-export function serializeBlock(node: Content, options?: BlockWriteOptions): string {
-  return toMarkdown(node, { ...SERIALIZE_OPTIONS, ...options }).replace(/\n$/, '')
 }

@@ -4,6 +4,7 @@
  * 内容
  * - sameTree(left, right)：mdast 形状比较（忽略 position / label / 写法差异）。
  * - standardizeContent(lifted, options)：写 → 读 → 同构；不同构返回 null。
+ * - standardizeBody(body)：整篇写完后做最后一次解析；抛错就退回纯文本。
  *
  * 行为
  * - 只比较语义：链接 / 图片的 label 不看；引用式写法不算差异；null 字段与缺失等价。
@@ -11,16 +12,17 @@
  * - 不 import Lexical / React；只依赖 mdast 类型、parseBody 与写手。
  *
  * 边界
- * - 只校验一个块；整篇顺序 / 边界由 blockSave 负责。
+ * - 块级只校验一个块；整篇顺序 / 边界由 blockSave 负责。
  * - 不判断块有没有改（调用方的事）。
  *
  * 相关文件
- * - 被依赖：projection.ts（导入时判 rich/source）、blockSave.ts（保存时兜底）。
- * - 依赖：mdastParse.ts、mdastLift.ts。
+ * - 被依赖：projection.ts（导入时判 rich/source）、blockSave.ts（整篇保存兜底）。
+ * - 依赖：mdastParse.ts、serialize.ts。
  *
  * 改哪里
  * - 改比较口径：comparable / sameTree。
  * - 改块级 gate：standardizeContent。
+ * - 改整篇兜底：standardizeBody。
  */
 import type { Content, RootContent } from 'mdast'
 import { parseBody } from './mdastParse'
@@ -103,5 +105,35 @@ export function standardizeContent(lifted: Content, options?: BlockWriteOptions)
     return sameTree(lifted, reparsed) ? written : null
   } catch {
     return null
+  }
+}
+
+/** 整篇保存的最后结果。 */
+export interface StandardBody {
+  /** 要写的正文。 */
+  readonly body: string
+  /** 原正文能否被标准解析器读回。 */
+  readonly standard: boolean
+}
+
+/**
+ * 整篇写完后做最后一次解析；读不回来就退回纯文本，保证保存路径总有结果。
+ * @param body - 由块级写出拼好的正文。
+ * @returns 正文 + 是否仍是原样。
+ */
+export function standardizeBody(body: string): StandardBody {
+  try {
+    parseBody(body)
+    return { body, standard: true }
+  } catch {
+    const paragraph: Content = {
+      type: 'paragraph',
+      children: body === '' ? [] : [{ type: 'text', value: body }],
+    }
+    try {
+      return { body: serializeBlock(paragraph), standard: false }
+    } catch {
+      return { body, standard: false }
+    }
   }
 }

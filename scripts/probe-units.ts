@@ -35,6 +35,7 @@ import {
   samePath,
 } from '../src/shared/paths'
 import { compareVersions } from '../src/shared/version'
+import { standardizeBody } from '../src/client/editor/core/standardize'
 import {
   copyFamilyOf,
   createdDocumentName,
@@ -88,6 +89,14 @@ check('utf8Length：ASCII', utf8Length('A') === 1)
 check('utf8Length：两字节', utf8Length('é') === 2)
 check('utf8Length：三字节', utf8Length('中') === 3)
 check('utf8Length：代理对算四字节', utf8Length('😀') === 4)
+check('整篇 standardize：正常正文原样', (() => {
+  const result = standardizeBody('a\n\nb\n')
+  return result.standard && result.body === 'a\n\nb\n'
+})())
+check('整篇 standardize：空正文原样', (() => {
+  const result = standardizeBody('')
+  return result.standard && result.body === ''
+})())
 
 // ── 版本冲突分类 ────────────────────────────────────────────────────────────
 check(

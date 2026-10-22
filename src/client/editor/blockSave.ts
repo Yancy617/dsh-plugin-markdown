@@ -44,6 +44,7 @@ import {
 import { serializeBlock, type BlockWriteOptions } from './core/serialize'
 import { parseBody } from './core/mdastParse'
 import { topLevelSpans } from './core/sourceMap'
+import { standardizeBody } from './core/standardize'
 import type { BaseBlock } from './saveBase'
 
 /**
@@ -242,7 +243,10 @@ export function $saveBody(
 
   // 一个内容块都没有：本来就没有内容（空文档 / 只有空行）⇒ 保留原文，不要凭空造文件；
   // 基线里原来有内容、现在全被删光 ⇒ 用户把整篇删掉了，写空才算把这次编辑落盘。
-  if (nextBase.length === 0) return { body: base.length === 0 ? source : '', blocks: [] }
+  if (nextBase.length === 0) {
+    const empty = standardizeBody(base.length === 0 ? source : '')
+    return { body: empty.body, blocks: [] }
+  }
 
   if (lastEntry !== undefined && lastUnchanged && lastEntry.index === base.length - 1) {
     push(source.slice(lastEntry.end))
@@ -250,5 +254,9 @@ export function $saveBody(
     push(eol)
   }
 
-  return { body: parts.join(''), blocks: nextBase }
+  const final =
+    dirty === undefined
+      ? standardizeBody(parts.join(''))
+      : { body: parts.join(''), standard: true }
+  return { body: final.body, blocks: final.standard ? nextBase : [] }
 }

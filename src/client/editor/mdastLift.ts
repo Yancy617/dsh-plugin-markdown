@@ -70,6 +70,7 @@ import type {
   ListItem,
   Paragraph,
   PhrasingContent,
+  Root,
   Table,
   TableCell,
   TableRow,
@@ -80,12 +81,37 @@ import { $isImageNode, type ImageNode } from './image'
 import { $isRawBlockNode } from './rawBlocks'
 import { $isRawInlineNode } from './rawInline'
 import { $isDefinitionNode } from './definitions'
+import { $isSourceBlockNode } from './sourceBlock'
 import { $referenceFormOf } from './referenceForm'
 import { $codeMetaOf } from './codeMeta'
 import { $taskListFormOf } from './taskListForm'
 import { tableAlignmentsState, type Alignment } from './tableModel'
 import { parseBody } from './mdastParse'
 import { isHardBreak } from './hardBreak'
+
+/** 逐块写时可覆盖的列表标记；根级写手不需要。 */
+export interface BlockWriteOptions {
+  readonly bullet?: ToMarkdownOptions['bullet']
+  readonly bulletOrdered?: ToMarkdownOptions['bulletOrdered']
+}
+
+/**
+ * 相邻两张同类列表要换一个标记，否则逐块写手写 `-` + `-`，重解会并成一张。
+ * @param previous - 前一个内容块的列表类型。
+ * @param node - 当前节点。
+ * @returns 逐块写选项；不需要时 undefined。
+ */
+export function listWriteOptions(
+  previous: string | null,
+  node: LexicalNode,
+): BlockWriteOptions | undefined {
+  if (!$isListNode(node)) return undefined
+  const type = node.getListType()
+  if (previous !== type) return undefined
+  if (type === 'bullet') return { bullet: '*' }
+  if (type === 'number') return { bulletOrdered: ')' }
+  return undefined
+}
 
 /** 标准 GFM 的写出选项；一次定死，所有改过的块共用。 */
 const SERIALIZE_OPTIONS: ToMarkdownOptions = {
@@ -103,6 +129,7 @@ const SERIALIZE_OPTIONS: ToMarkdownOptions = {
  * @returns mdast 块；认不出时给一个只含可见文字的段落。
  */
 export function liftBlock(node: LexicalNode): Content {
+  if ($isSourceBlockNode(node)) return liftSource(node.getRaw())
   if ($isHeadingNode(node)) {
     const heading: Heading = {
       type: 'heading',
@@ -193,7 +220,12 @@ function liftInlineChildren(node: LexicalNode): PhrasingContent[] {
  */
 function blockChildren(node: LexicalNode): Content[] {
   if (!$isElementNode(node)) return [liftBlock(node)]
-  return node.getChildren().map(child => liftBlock(child))
+  const blocks: Content[] = []
+  for (const child of node.getChildren()) {
+    if ($isSourceBlockNode(child)) blocks.push(...liftSourceBlocks(child.getRaw()))
+    else blocks.push(liftBlock(child))
+  }
+  return blocks
 }
 
 /**
@@ -325,6 +357,11 @@ function liftItemChildren(item: ListItemNode): Content[] {
   }
   if (!$isElementNode(item)) return [{ type: 'paragraph', children: [] }]
   for (const child of item.getChildren()) {
+    if ($isSourceBlockNode(child)) {
+      flush()
+      blocks.push(...liftSourceBlocks(child.getRaw()))
+      continue
+    }
     if (isBlockNode(child)) {
       flush()
       blocks.push(liftBlock(child))
@@ -385,6 +422,70 @@ function liftCell(cell: TableCellNode): PhrasingContent[] {
 }
 
 /**
+ * source 块的源文本 ⇒ 一组 mdast 块。
+ * @param raw - 源文本。
+ * @returns 块数组；空文本给一个空段落。
+ */
+function liftSourceBlocks(raw: string): Content[] {
+  const children = parseBody(raw).children
+  if (children.length > 0) return children
+  return [{ type: 'paragraph', children: raw === '' ? [] : [{ type: 'text', value: raw }] }]
+}
+
+/**
+ * source 块：取第一块（调用方需要全部块时用 liftSourceBlocks）。
+ * @param raw - 源文本。
+ * @returns mdast 块。
+ */
+function liftSource(raw: string): Content {
+  return liftSourceBlocks(raw)[0] as Content
+}
+
+/**
+ * source 块 ⇒ 标准 Markdown（可含多个块）。
+ * @param raw - 源文本。
+ * @returns 标准 Markdown，块间两个换行。
+ */
+export function serializeSource(raw: string): string {
+  // source 块就是用户自己写的 Markdown：原样写回，不重新拼写。
+  // 它已经被标准解析器读过（或就是纯文本），交给写手反而会改掉用户的拼法。
+  return raw.replace(/\n$/, '')
+}
+
+/**
+ * 一个顶层节点 ⇒ 一组 mdast 块（source 块可展开成多块）。
+ * @param node - 顶层节点。
+ * @returns 块数组。
+ */
+export function liftNodeBlocks(node: LexicalNode): Content[] {
+  if ($isSourceBlockNode(node)) return liftSourceBlocks(node.getRaw())
+  return [liftBlock(node)]
+}
+
+/**
+ * 一个 mdast 根 ⇒ 标准 Markdown。
+ *
+ * 根级写手知道“相邻列表要用不同标记”，所以相邻的两张列表不会被重解合并；
+ * 逐块写手不知道上下文，只能用于单块。
+ * @param root - mdast 根。
+ * @returns 标准 Markdown，不含末尾换行。
+ */
+export function serializeRoot(root: Root): string {
+  return toMarkdown(root, SERIALIZE_OPTIONS).replace(/\n$/, '')
+}
+
+/**
+ * 一个顶层 Lexical 节点 ⇒ 标准 Markdown（source 块按完整片段写）。
+ * @param node - 顶层节点。
+ * @param options - 逐块写时覆盖的列表标记。
+ * @returns 标准 Markdown。
+ */
+export function serializeLexicalBlock(node: LexicalNode, options?: BlockWriteOptions): string {
+  if ($isSourceBlockNode(node)) return serializeSource(node.getRaw())
+  return serializeBlock(liftBlock(node), options)
+}
+
+/**
  * 定义行：按原文再解析一次；解析不出 definition 就按 HTML 原样写。
  * @param raw - 定义那一行的原文。
  * @returns mdast 块。
@@ -409,6 +510,7 @@ function isBlockNode(node: LexicalNode): boolean {
     $isHeadingNode(node) ||
     $isRuleNode(node) ||
     $isRawBlockNode(node) ||
+    $isSourceBlockNode(node) ||
     $isDefinitionNode(node)
   )
 }
@@ -416,8 +518,9 @@ function isBlockNode(node: LexicalNode): boolean {
 /**
  * 一个块 ⇒ 标准 Markdown。
  * @param node - mdast 块。
+ * @param options - 逐块写时覆盖的列表标记。
  * @returns 不带末尾换行的 Markdown 文本。
  */
-export function serializeBlock(node: Content): string {
-  return toMarkdown(node, SERIALIZE_OPTIONS).replace(/\n$/, '')
+export function serializeBlock(node: Content, options?: BlockWriteOptions): string {
+  return toMarkdown(node, { ...SERIALIZE_OPTIONS, ...options }).replace(/\n$/, '')
 }

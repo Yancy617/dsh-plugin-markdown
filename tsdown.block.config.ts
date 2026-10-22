@@ -4,7 +4,7 @@
 import { defineConfig } from 'tsdown'
 
 export default defineConfig({
-  entry: ['scripts/probe-block.ts', 'scripts/probe-units.ts'],
+  entry: ['scripts/probe-block.ts', 'scripts/probe-units.ts', 'scripts/probe-syntax.ts'],
   outDir: '_probe',
   format: ['esm'],
   platform: 'node',

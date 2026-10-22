@@ -34,6 +34,8 @@ import { ImageNode } from './image'
 import { RawBlockNode } from './rawBlocks'
 import { RawInlineNode } from './rawInline'
 import { DEFINITION_NODE } from './definitions'
+import { MdBlockBreakNode } from './blockBreak'
+import { SourceBlockNode } from './sourceBlock'
 
 /** Node classes the editor may construct. No Markdown transformer table lives here any more. */
 export const EDITOR_NODES: ReadonlyArray<Klass<LexicalNode>> = [
@@ -53,6 +55,10 @@ export const EDITOR_NODES: ReadonlyArray<Klass<LexicalNode>> = [
   TableCellNode,
   // 链接定义的载体：不可见、块级，保住定义那一行的原文直到它被改。
   DEFINITION_NODE,
+  // 块间分隔：只存在于模型里，阻止相邻同类列表被 Lexical 合并；不写文件。
+  MdBlockBreakNode,
+  // 可编辑的普通文本 source 块：不能无损建模的构造按源文本显示，仍然可编辑。
+  SourceBlockNode,
 ]
 /** Class names the stylesheet below targets. */
 export const EDITOR_THEME: EditorThemeClasses = {
@@ -592,6 +598,19 @@ body[data-ds-dark-theme] .md-li-checked::after {
   white-space: pre-wrap; word-break: break-all;
   user-select: text;
 }
+/* A source block: plain, editable Markdown source; not rendered as rich text. */
+.md-source-host { display: block; margin: 16px 0; }
+.md-source-input {
+  display: block; box-sizing: border-box; width: 100%; min-height: 3.5em;
+  margin: 0; padding: 12px 16px; resize: vertical;
+  border: 0; border-left: 3px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-lg);
+  background: var(--dsw-alias-markdown-code-block);
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-markdown-code-block);
+  white-space: pre-wrap; word-break: break-all;
+}
+.md-source-input:focus { outline: 2px solid var(--dsw-alias-link); outline-offset: 2px; }
 /* The host carries no space of its own; height and margin sit on the 'hr' itself
    ('height: 0.5px; margin: 32px 0'), so the space is symmetric about the line.
    'RuleNode.createDOM' is a block div, not an inline host, so no line-box trick

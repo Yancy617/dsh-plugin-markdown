@@ -28,13 +28,36 @@
  * - 改粘贴：$pastedMarkdownNodes。
  */
 import { $getRoot, type ElementNode, type LexicalNode } from 'lexical'
+import { $isListNode } from '@lexical/list'
 import { $ensureTrailingParagraph } from './trailingParagraph'
 import { $isEmptyParagraph } from './emptyParagraph'
-import { lowerDocument, lowerPasted } from './mdastLower'
-import { liftBlock, serializeBlock } from './mdastLift'
+import { lowerDocument } from './mdastLower'
+import { projectDocumentNodes } from './projection'
+import { listWriteOptions, serializeLexicalBlock } from './mdastLift'
 import { parseBody } from './mdastParse'
 import { $captureBase } from './blockSave'
+import { $createBlockBreakNode, $isBlockBreakNode } from './blockBreak'
 import type { BaseBlock } from './saveBase'
+
+/**
+ * 在会被 Lexical 合并的相邻块之间插入内部的分隔节点。
+ *
+ * 只处理相邻的两张列表：`@lexical/list` 的 `$transform` 会把它们并成一张。分隔节点
+ * 不写文件、不进剪贴板、不参与基线；它只是让编辑器树保留“两张列表”这个事实。
+ * @param nodes - 一行顶层节点。
+ * @returns 带分隔节点的节点序列。
+ */
+function stabilizeBlockSequence(nodes: readonly LexicalNode[]): LexicalNode[] {
+  const out: LexicalNode[] = []
+  for (const node of nodes) {
+    const previous = out[out.length - 1]
+    if (previous !== undefined && $isListNode(previous) && $isListNode(node)) {
+      out.push($createBlockBreakNode())
+    }
+    out.push(node)
+  }
+  return out
+}
 
 /**
  * 把一份正文读进编辑器的根节点，并返回块级保存基线。
@@ -47,7 +70,8 @@ export function importDocumentMarkdown(body: string): BaseBlock[] {
   const root = $getRoot()
   root.clear()
   const parsed = parseBody(body)
-  const nodes = lowerDocument(parsed, body)
+  const projected = projectDocumentNodes(parsed, lowerDocument(parsed, body), body)
+  const nodes = stabilizeBlockSequence(projected)
   for (const node of nodes) root.append(node)
   const base = $captureBase(body, parsed)
   // 文末可写位置不属于文件内容，基线里不收它。
@@ -63,7 +87,9 @@ export function importDocumentMarkdown(body: string): BaseBlock[] {
  * @returns 可以交给 $insertGeneratedNodes 的顶层节点。
  */
 export function $pastedMarkdownNodes(text: string): LexicalNode[] {
-  return lowerPasted(text)
+  const parsed = parseBody(text)
+  const projected = projectDocumentNodes(parsed, lowerDocument(parsed, text), text)
+  return stabilizeBlockSequence(projected)
 }
 
 /**
@@ -76,9 +102,11 @@ export function $pastedMarkdownNodes(text: string): LexicalNode[] {
 export function serializeDocumentMarkdown(root?: ElementNode): string {
   const container = root ?? $getRoot()
   const blocks: string[] = []
+  let previousListType: string | null = null
   for (const child of container.getChildren()) {
-    if ($isEmptyParagraph(child)) continue
-    blocks.push(serializeBlock(liftBlock(child)))
+    if ($isEmptyParagraph(child) || $isBlockBreakNode(child)) continue
+    blocks.push(serializeLexicalBlock(child, listWriteOptions(previousListType, child)))
+    previousListType = $isListNode(child) ? child.getListType() : null
   }
   return blocks.join('\n\n')
 }

@@ -62,7 +62,6 @@ import type {
   Root,
   RootContent,
   Table,
-  TableCell,
 } from 'mdast'
 import { $createRuleNode } from './RuleNode'
 import { $createImageNode } from './image'
@@ -169,7 +168,7 @@ function lowerBlock(node: RootContent, ctx: Context): LexicalNode | null {
     case 'table':
       return lowerTable(node, ctx)
     case 'html':
-      return $createRawBlockNode(slice(node, ctx), 'html')
+      return $createRawBlockNode(node.value, 'html')
     case 'definition':
       return $createDefinitionNode(slice(node, ctx))
     default:
@@ -196,6 +195,24 @@ function lowerList(node: List, ctx: Context): LexicalNode {
 }
 
 /**
+ * 这一段行内内容是不是自己就以换行开头。
+ *
+ * 列表项把多段压成“一段＋换行”；如果下一段本身以 `\n` 开头（`&#xA;` 的解析结果），
+ * 再补一个分隔换行就会叠成两个，写手每轮再把它们写成 `&#xA;`，文件会无界增长。
+ * 只在“段首已经是换行”时省掉那一个分隔换行；真正的多段模型仍由后续批次补。
+ * @param node - mdast 行内节点。
+ * @returns 是否以换行开头。
+ */
+function startsWithLineBreak(node: PhrasingContent): boolean {
+  if (node.type === 'break') return true
+  if (node.type === 'text') return node.value.startsWith('\n')
+  if ('children' in node && node.children.length > 0) {
+    return startsWithLineBreak(node.children[0] as PhrasingContent)
+  }
+  return false
+}
+
+/**
  * 列表项 ⇒ ListItemNode。
  * @param item - mdast listItem。
  * @param task - 父列表是不是任务列表。
@@ -207,7 +224,9 @@ function lowerItem(item: ListItem, task: boolean, ctx: Context): LexicalNode {
   let inlineParagraph = true
   for (const child of item.children) {
     if (child.type === 'paragraph') {
-      if (!inlineParagraph) itemNode.append($createLineBreakNode())
+      const first = child.children[0]
+      const leadingBreak = first !== undefined && startsWithLineBreak(first)
+      if (!inlineParagraph && !leadingBreak) itemNode.append($createLineBreakNode())
       itemNode.append(...lowerInline(child.children, ctx))
       inlineParagraph = false
       continue
@@ -240,7 +259,7 @@ function lowerTable(node: Table, ctx: Context): LexicalNode {
       const status = rowIndex === 0 ? TableCellHeaderStates.ROW : TableCellHeaderStates.NO_STATUS
       const cellNode = $createTableCellNode(status)
       const paragraph = $createParagraphNode()
-      paragraph.append(...lowerCell(cell, ctx))
+      paragraph.append(...lowerInline(cell.children, ctx))
       cellNode.append(paragraph)
       rowNode.append(cellNode)
     })
@@ -251,24 +270,6 @@ function lowerTable(node: Table, ctx: Context): LexicalNode {
   )
   $setState(table, tableAlignmentsState, align)
   return table
-}
-
-/**
- * 单元格内容 ⇒ 行内节点。
- * @param cell - mdast tableCell。
- * @param ctx - 映射上下文。
- * @returns 行内节点。
- */
-function lowerCell(cell: TableCell, ctx: Context): LexicalNode[] {
-  const out: LexicalNode[] = []
-  for (const child of cell.children) {
-    if (child.type === 'text' || child.type === 'emphasis' || child.type === 'strong' || child.type === 'delete' || child.type === 'inlineCode' || child.type === 'link' || child.type === 'image' || child.type === 'html' || child.type === 'break') {
-      out.push(...lowerInline([child], ctx))
-    } else {
-      out.push($createTextNode(valueOf(child)))
-    }
-  }
-  return out
 }
 
 /**
@@ -356,7 +357,7 @@ function lowerInline(nodes: readonly PhrasingContent[], ctx: Context): LexicalNo
         break
       }
       case 'html': {
-        out.push($createRawInlineNode(slice(node, ctx)))
+        out.push($createRawInlineNode(node.value))
         break
       }
       default:

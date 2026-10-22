@@ -90,6 +90,7 @@ import { $ensureTrailingParagraph } from './trailingParagraph'
 import { eolOf } from './lineEnding'
 import { $captureBase, $saveBody } from './blockSave'
 import { isStaleBase, type BaseBlock, type SourceBase } from './saveBase'
+import { SOURCE_EDIT_TAG } from './sourceBlock'
 import { $isEmptyParagraph } from './emptyParagraph'
 import { FloatingToolbar } from './FloatingToolbar'
 import { joinFrontmatter, splitFrontmatter } from './frontmatter'
@@ -342,6 +343,12 @@ function EditorBridge({
          * 插件和菜单监听当成同一次历史更新，而不是一条新编辑 / 一次新弹窗。
          */
         const historic = tags.has(HISTORIC_TAG)
+        /*
+         * source 块是 DecoratorNode：改它的 __raw 不会进 dirtyElements / dirtyLeaves，
+         * 但这次 update 带了 SOURCE_EDIT_TAG。保存要把它当“改过”，并且整篇重算，
+         * 否则会复用旧 written 把用户的编辑吞掉。
+         */
+        const sourceEdit = tags.has(SOURCE_EDIT_TAG)
         /**
          * **"文末始终有一个空段落"这条不变量在这里守**（`./trailingParagraph.ts` 的
          * `$ensureTrailingParagraph`）。
@@ -367,7 +374,7 @@ function EditorBridge({
         }
         // 只改选区的更新两个集合都是空的，而粘贴、输入、格式化命令一定至少脏一个节点。
         // 这种更新不需要重新算正文：正文没变，`onChange` 把同一份交回去就够了（调用方比较后不动）。
-        const changed = dirtyElements.size > 0 || dirtyLeaves.size > 0
+        const changed = sourceEdit || dirtyElements.size > 0 || dirtyLeaves.size > 0
         if (!changed) {
           onChangeRef.current(joinFrontmatter(frontmatterRef.current, sourceRef.current))
           return
@@ -377,8 +384,9 @@ function EditorBridge({
             sourceRef.current,
             sourceBaseRef.current.blocks,
             eolOf(sourceRef.current),
-            // 历史恢复（撤销 / 重做）的脏集合不可依赖：整篇重算。其余更新只把脏掉的顶层块交给写手。
-            historic ? undefined : $dirtyTopLevelBlocks(dirtyElements.keys(), dirtyLeaves),
+            // 历史恢复（撤销 / 重做）的脏集合不可依赖；source 块改动也不在 dirty 集合里。
+            // 两者都整篇重算；其余更新只把脏掉的顶层块交给写手。
+            historic || sourceEdit ? undefined : $dirtyTopLevelBlocks(dirtyElements.keys(), dirtyLeaves),
           ),
         )
         sourceBaseRef.current.blocks = saved.blocks

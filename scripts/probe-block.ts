@@ -48,7 +48,7 @@ import { $createLinkNode } from '@lexical/link'
 import { registerList } from '@lexical/list'
 import { registerRichText } from '@lexical/rich-text'
 import { EDITOR_CSS, EDITOR_NODES } from '../src/client/editor/config'
-import { importDocumentMarkdown, $pastedMarkdownNodes } from '../src/client/editor/documentMarkdown'
+import { importDocumentMarkdown, $pastedMarkdownNodes, serializeDocumentMarkdown } from '../src/client/editor/documentMarkdown'
 import { $captureBase, $saveBody } from '../src/client/editor/blockSave'
 import type { BaseBlock } from '../src/client/editor/saveBase'
 import { $selectionMarkdown } from '../src/client/editor/clipboardMarkdown'
@@ -60,6 +60,7 @@ import { registerListIndent } from '../src/client/editor/listNesting'
 import { $selectedImageKeys, registerImageKeys } from '../src/client/editor/imageSelection'
 import { applyBlockOperation, NESTING_OPERATIONS } from '../src/client/editor/operations'
 import { parseBody } from '../src/client/editor/mdastParse'
+import { $isSourceBlockNode, SOURCE_EDIT_TAG } from '../src/client/editor/sourceBlock'
 
 function makeEditor(): LexicalEditor {
   return createHeadlessEditor({
@@ -209,6 +210,143 @@ function occurrences(text: string, needle: string): number {
   const { editor, base } = openDocument(body)
   const unchanged = saveWith(editor, body, base)
   check('打开后不改，保存逐字节等于原文', unchanged === body, `${String(unchanged.length)} / ${String(body.length)} 字符`)
+}
+
+// 1b. 定义紧跟 Setext 标题：mdast 会把标题的起点报成 0，基线必须夹紧。
+{
+  const source = '[foo]: /url\nbar\n===\n[foo]\n'
+  const { editor, base } = openDocument(source)
+  const unchanged = saveWith(editor, source, base)
+  check('定义紧跟 Setext：保存不重复定义', unchanged === source, JSON.stringify(unchanged))
+}
+
+// 1c. 相邻的两张列表：Lexical 会合并；分隔节点必须让两张都留下。
+{
+  const source = '- foo\n- bar\n+ baz\n'
+  const { editor, base } = openDocument(source)
+  const unchanged = saveWith(editor, source, base)
+  check('相邻无序列表：保存保留第二张', unchanged === source, JSON.stringify(unchanged))
+}
+{
+  const source = '1. foo\n2. bar\n3) baz\n'
+  const { editor, base } = openDocument(source)
+  const unchanged = saveWith(editor, source, base)
+  check('相邻有序列表：保存保留第二张', unchanged === source, JSON.stringify(unchanged))
+}
+
+// 1d. 表格单元格里的引用式链接：改另一个格子时不能被清空。
+{
+  const source = '| a | b |\n| --- | --- |\n| [x][r] | y |\n\n[r]: https://e.x\n'
+  const { editor, base } = openDocument(source)
+  editor.update(
+    () => {
+      const target: TextNode | undefined = $getRoot()
+        .getAllTextNodes()
+        .find(node => node.getTextContent() === 'a')
+      target?.setTextContent('aX')
+    },
+    { discrete: true },
+  )
+  const saved = saveWith(editor, source, base)
+  check('表格引用式链接：改表头后仍在', saved.includes('[x][r]'), JSON.stringify(saved))
+}
+
+// 1e. 引用块里的 HTML：raw 值不能带续行的 `>`。
+{
+  const source = '> <div>\n> foo\n\nbar\n'
+  const { editor, base } = openDocument(source)
+  const saved = saveWith(editor, source, base)
+  check('引用里的 HTML：保存不多 >', saved === source, JSON.stringify(saved))
+}
+
+// 1f. 列表项里的段首换行：不能每轮再叠一个 `&#xA;`。
+{
+  const source = '1.  foo\n\n    ```\n    bar\n    ```\n\n    baz\n\n    > bam\n'
+  const first = (() => {
+    const { editor } = openDocument(source)
+    return editor.getEditorState().read(() => serializeDocumentMarkdown())
+  })()
+  const second = (() => {
+    const { editor } = openDocument(first)
+    return editor.getEditorState().read(() => serializeDocumentMarkdown())
+  })()
+  check('列表项首换行：第二轮不再增长', first === second, JSON.stringify({ first, second }))
+}
+
+// 1g. 不能无损建模的块：投影成可编辑的 source 块，保存仍标准。
+{
+  const source = '*_foo_*\n'
+  const { editor, base } = openDocument(source)
+  const first = editor.getEditorState().read(() => $getRoot().getFirstChild())
+  check('嵌套强调：投影成 source 块', $isSourceBlockNode(first))
+  editor.update(
+    () => {
+      const node = $getRoot().getFirstChild()
+      if ($isSourceBlockNode(node)) node.setRaw('*_fooX_*')
+    },
+    { discrete: true },
+  )
+  const saved = saveWith(editor, source, base)
+  check('嵌套强调：改 source 文本后保存仍是标准写法', saved.includes('fooX'), JSON.stringify(saved))
+}
+
+// 1g2. source 块改成多个块：保存不能只写第一段。
+{
+  const source = '*_foo_*\n'
+  const { editor, base } = openDocument(source)
+  editor.update(
+    () => {
+      const node = $getRoot().getFirstChild()
+      if ($isSourceBlockNode(node)) node.setRaw('one\n\ntwo')
+    },
+    { discrete: true },
+  )
+  const saved = saveWith(editor, source, base)
+  check('source 块改成两块：两段都落盘', saved.includes('one') && saved.includes('two'), JSON.stringify(saved))
+}
+
+// 1g3. source 块的改动必须带 SOURCE_EDIT_TAG，否则保存会复用旧 written。
+{
+  const source = '*_foo_*\n'
+  const { editor } = openDocument(source)
+  let hit = false
+  const unregister = editor.registerUpdateListener(({ tags }) => {
+    if (tags.has(SOURCE_EDIT_TAG)) hit = true
+  })
+  editor.update(
+    () => {
+      const node = $getRoot().getFirstChild()
+      if ($isSourceBlockNode(node)) node.setRaw('*_bar_*')
+    },
+    { discrete: true },
+  )
+  unregister()
+  check('source 块改动带 SOURCE_EDIT_TAG', hit)
+}
+
+// 1h. 松列表：不能无损建模时投影成 source；文本与两个段落都还在。
+{
+  const source = '- one\n\n  two\n'
+  const { editor } = openDocument(source)
+  const first = editor.getEditorState().read(() => $getRoot().getFirstChild())
+  check('松列表：投影成 source 块', $isSourceBlockNode(first))
+}
+
+// 1i. HTML 块：投影成 source，仍可改、保存不多字节。
+{
+  const source = '<div>\nfoo\n</div>\n'
+  const { editor, base } = openDocument(source)
+  const first = editor.getEditorState().read(() => $getRoot().getFirstChild())
+  check('HTML 块：投影成 source 块', $isSourceBlockNode(first))
+  editor.update(
+    () => {
+      const node = $getRoot().getFirstChild()
+      if ($isSourceBlockNode(node)) node.setRaw('<div>\nbar\n</div>')
+    },
+    { discrete: true },
+  )
+  const saved = saveWith(editor, source, base)
+  check('HTML 块：改 source 后保存仍标准', saved.includes('bar'), JSON.stringify(saved))
 }
 
 // 2. 改一段里的一个字。

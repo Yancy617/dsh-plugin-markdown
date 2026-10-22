@@ -41,7 +41,7 @@ import {
 import { $generateHtmlFromNodes } from '@lexical/html'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
 import { useEffect } from 'react'
-import { liftBlock, serializeBlock } from './mdastLift'
+import { serializeLexicalBlock } from './mdastLift'
 import { $isEmptyParagraph } from './emptyParagraph'
 import { $htmlFlavorAsMarkdown } from './htmlMarkdown'
 import { $topLevelBlockOf } from './tree'
@@ -100,7 +100,7 @@ export function $selectionMarkdown(editor: LexicalEditor, selection: BaseSelecti
   if (blocks.length === 0) return ''
   if ($isWholeBlocks(selection, blocks)) {
     return blocks
-      .map(block => serializeBlock(liftBlock(block)))
+      .map(block => serializeLexicalBlock(block))
       .filter(text => text !== '')
       .join('\n\n')
   }

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 块级保存：未改的顶层块从原文切片，改过的块用 mdast 标准写。
  *
  * 内容
@@ -6,7 +6,7 @@
  * - $saveBody(source, base, eol, dirty?)：按当前树重建正文，并返回下一次保存要用的基线。
  *
  * 行为
- * - **“一块内容是什么”只有一个定义**：`serializeBlock(liftBlock(node))`。基线里存的
+ * - **“一块内容是什么”只有一个定义**：`serializeLexicalBlock(node)`。基线里存的
  *   `written` 就是它，判改也只是拿它再比一次——没有第二份“语义字段清单”。
  * - 一个块没改（同一 NodeKey，`written` 相同，且 base 里有 span）⇒ 原文 slicing，一个字节都不重写。
  * - 块改了 / 新块 / 键换了 ⇒ 用同一串 `written` 写出（mdast-util-to-markdown ＋ GFM）。
@@ -33,19 +33,37 @@
  * - 改拼装规则：$saveBody。
  */
 import { $getRoot, type LexicalNode } from 'lexical'
-import type { Root } from 'mdast'
+import { $isListNode } from '@lexical/list'
+import type { Content, Root } from 'mdast'
 import { $isEmptyParagraph } from './emptyParagraph'
-import { liftBlock, serializeBlock } from './mdastLift'
+import { $isBlockBreakNode } from './blockBreak'
+import { serializeBlock, serializeLexicalBlock, listWriteOptions, type BlockWriteOptions } from './mdastLift'
 import { parseBody } from './mdastParse'
+import { topLevelSpans } from './sourceMap'
 import type { BaseBlock } from './saveBase'
 
 /**
  * 这个块的“标准写法”。
+ * 写手抛错时退回纯文本段落，保证保存路径不会因为语法抛给用户。
  * @param node - 顶层块。
+ * @param options - 相邻列表的标记覆盖。
  * @returns 由写手给出的那一串 Markdown（不含末尾换行）。
  */
-function writtenOf(node: LexicalNode): string {
-  return serializeBlock(liftBlock(node))
+function writtenOf(node: LexicalNode, options?: BlockWriteOptions): string {
+  try {
+    return serializeLexicalBlock(node, options)
+  } catch {
+    const text = node.getTextContent()
+    const paragraph: Content = {
+      type: 'paragraph',
+      children: text === '' ? [] : [{ type: 'text', value: text }],
+    }
+    try {
+      return serializeBlock(paragraph)
+    } catch {
+      return text
+    }
+  }
 }
 
 /**
@@ -77,22 +95,22 @@ export function $captureBase(source: string, parsed: Root = parseBody(source)): 
    */
   const contentBlocks = $getRoot()
     .getChildren()
-    .filter(node => !$isEmptyParagraph(node))
+    .filter(node => !$isEmptyParagraph(node) && !$isBlockBreakNode(node))
+  const spans = topLevelSpans(parsed.children, source)
   const count = Math.min(parsed.children.length, contentBlocks.length)
+  let previousListType: string | null = null
   for (let index = 0; index < count; index += 1) {
     const node = contentBlocks[index]
-    const child = parsed.children[index]
-    if (node === undefined || child === undefined) continue
-    const start = child.position?.start.offset
-    const end = child.position?.end.offset
-    if (start === undefined || end === undefined) continue
+    const span = spans[index]
+    if (node === undefined || span === undefined) continue
     blocks.push({
       key: node.getKey(),
-      start,
-      end,
-      written: writtenOf(node),
+      start: span.start,
+      end: span.end,
+      written: writtenOf(node, listWriteOptions(previousListType, node)),
       index: blocks.length,
     })
+    previousListType = $isListNode(node) ? node.getListType() : null
   }
   return blocks
 }
@@ -117,7 +135,8 @@ export function $saveBody(
   let last = children.length - 1
   while (last >= 0) {
     const node = children[last]
-    if (node === undefined || !$isEmptyParagraph(node)) break
+    if (node === undefined) break
+    if (!$isEmptyParagraph(node) && !$isBlockBreakNode(node)) break
     last -= 1
   }
 
@@ -133,6 +152,7 @@ export function $saveBody(
   let lastEntry: BaseBlock | undefined
   let lastUnchanged = false
   let emitted = false
+  let previousListType: string | null = null
 
   const push = (text: string): void => {
     if (text === '') return
@@ -143,6 +163,7 @@ export function $saveBody(
   for (let index = 0; index <= last; index += 1) {
     const node = children[index]
     if (node === undefined) continue
+    if ($isBlockBreakNode(node)) continue
     if ($isEmptyParagraph(node)) {
       // 空行可能是导入时带来的，也可能是用户新加的。相邻 base 块之间那一段原文里已经含有
       // 导入时的空行；到拼 gap 时再减去它们，只补用户新加的那几行（见 gapBlanks）。
@@ -156,7 +177,8 @@ export function $saveBody(
      * 脏块 / 新块现算一次——这一串同时是“判改”的判据和“写出”的内容，两者不会分家。
      */
     const reusable = entry !== undefined && dirty !== undefined && !dirty.has(entry.key)
-    const written = reusable && entry !== undefined ? entry.written : writtenOf(node)
+    const options = listWriteOptions(previousListType, node)
+    const written = reusable && entry !== undefined ? entry.written : writtenOf(node, options)
     const unchanged = entry !== undefined && written === entry.written
     let text: string
     if (unchanged && entry !== undefined) {
@@ -165,6 +187,7 @@ export function $saveBody(
       text = eol === '\n' ? written : written.replace(/\n/g, eol)
     }
     if (text === '') continue
+    previousListType = $isListNode(node) ? node.getListType() : null
 
     if (!emitted) {
       // 第一个内容块还是原文第一个块：前面那点（frontmatter 后的空行等）照抄。

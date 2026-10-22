@@ -2,13 +2,15 @@
  * YAML frontmatter 的保存：切分与拼回。
  *
  * 内容
- * - SplitMarkdown / splitFrontmatter(markdown) / joinFrontmatter(frontmatter, body)。
+ * - SplitMarkdown / splitFrontmatter(markdown) / joinFrontmatter(frontmatter, body, bom)。
  * - FRONTMATTER_BLOCK：行首 --- 到行首 --- 的块（两条线之间可以是空的）。
  * - looksLikeFrontmatter：块里顶格的每一行都是空行 / 注释 / `key:`，且至少一个 key。
  *
  * 行为
  * - 只在文档开头匹配；两条 --- 之间必须像 YAML 映射才切走，否则整块按正文。
- * - split 切走 frontmatter，编辑器只收正文；join 原样拼回，正文没改时逐字节相同。
+ * - 开头的 BOM 单独切出去（`SplitMarkdown.bom`）：mdast 把 BOM 当编码标记，后面每个
+ *   offset 都少 1，带进解析会让每个块的原文切片都错开一个字节。
+ * - split 切走 frontmatter，编辑器只收正文；join 原样拼回（含 BOM），正文没改时逐字节相同。
  * - 空正文时只返回 frontmatter，不额外加换行。
  * - 空块（只有空行）算 frontmatter；纯注释块不算。
  *
@@ -28,6 +30,8 @@
 
 /** A document split into its optional frontmatter block and its body. */
 export interface SplitMarkdown {
+  /** A leading byte-order mark, kept verbatim and outside the Markdown parse. */
+  readonly bom: string
   /** The exact frontmatter text including both fences, or `null` when absent. */
   readonly frontmatter: string | null
   /** Everything after the frontmatter block, unchanged. */
@@ -102,21 +106,28 @@ function looksLikeFrontmatter(content: string): boolean {
 
 /**
  * Split a document into frontmatter and body.
+ *
+ * A leading BOM is split off too: `mdast-util-from-markdown` treats it as an encoding marker
+ * and reports every later offset one short, which would shift every block slice by one byte.
+ * Keeping it in `bom` and re-attaching it on save preserves the file without poisoning offsets.
  * @param markdown - full document text.
  * @returns the split halves; `frontmatter` is `null` when no block is present.
  */
 export function splitFrontmatter(markdown: string): SplitMarkdown {
-  const match = FRONTMATTER_BLOCK.exec(markdown)
-  if (match === null) return { frontmatter: null, body: markdown }
+  const bom = markdown.startsWith('\uFEFF') ? '\uFEFF' : ''
+  const text = bom === '' ? markdown : markdown.slice(bom.length)
+  const match = FRONTMATTER_BLOCK.exec(text)
+  if (match === null) return { bom, frontmatter: null, body: text }
   // A block that does not look like a YAML mapping is content that merely starts with a
   // thematic break and has another one later; keep the whole document intact.
-  if (!looksLikeFrontmatter(match[1] ?? '')) return { frontmatter: null, body: markdown }
+  if (!looksLikeFrontmatter(match[1] ?? '')) return { bom, frontmatter: null, body: text }
   const block = match[0]
   return {
+    bom,
     // One terminator belongs to the boundary, not to the block; stripping only `\n` would leave
     // the `\r` of a CRLF fence behind and the join would double it.
     frontmatter: block.replace(/\r?\n$/, ''),
-    body: markdown.slice(block.length),
+    body: text.slice(block.length),
   }
 }
 
@@ -129,12 +140,13 @@ export function splitFrontmatter(markdown: string): SplitMarkdown {
  * deliberately keeps neither.
  * @param frontmatter - block returned by {@link splitFrontmatter}.
  * @param body - edited body text.
+ * @param bom - leading byte-order mark returned by {@link splitFrontmatter}.
  * @returns the document, byte-identical to the source when `body` is unchanged.
  */
-export function joinFrontmatter(frontmatter: string | null, body: string): string {
-  if (frontmatter === null) return body
+export function joinFrontmatter(frontmatter: string | null, body: string, bom = ''): string {
+  if (frontmatter === null) return `${bom}${body}`
   // A fence with nothing after it cannot have consumed a terminator.
-  if (body === '') return frontmatter
+  if (body === '') return `${bom}${frontmatter}`
   const eol = frontmatter.includes('\r\n') || body.includes('\r\n') ? '\r\n' : '\n'
-  return `${frontmatter}${eol}${body}`
+  return `${bom}${frontmatter}${eol}${body}`
 }

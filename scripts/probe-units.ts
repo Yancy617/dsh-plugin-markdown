@@ -290,6 +290,22 @@ check(
   'frontmatter：正文是 CRLF 时边界也用 CRLF',
   joinFrontmatter('---\ntitle: x\n---', 'a\r\nb') === '---\ntitle: x\n---\r\na\r\nb',
 )
+const bomDoc = '\uFEFF---\ntitle: x\n---\nbody'
+const bomSplit = splitFrontmatter(bomDoc)
+check(
+  'frontmatter：BOM 切走，正文与 frontmatter 都不含它',
+  bomSplit.bom === '\uFEFF' &&
+    bomSplit.frontmatter === '---\ntitle: x\n---' &&
+    bomSplit.body === 'body',
+)
+check(
+  'frontmatter：BOM 拼回逐字节相同',
+  joinFrontmatter(bomSplit.frontmatter, bomSplit.body, bomSplit.bom) === bomDoc,
+)
+check(
+  'frontmatter：没有 frontmatter 时 BOM 也拼回',
+  joinFrontmatter(null, 'body', '\uFEFF') === '\uFEFFbody',
+)
 
 // ── 路径 ────────────────────────────────────────────────────────────────────
 check('路径：childPath 跟父级反斜杠', childPath('C:\\vault', 'a') === 'C:\\vault\\a')

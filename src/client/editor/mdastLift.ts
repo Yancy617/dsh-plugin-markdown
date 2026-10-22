@@ -6,10 +6,13 @@
  * - liftInline(node)：一个行内节点 ⇒ mdast 的 PhrasingContent（可能是一层格式包装）。
  * - serializeLexicalBlock(node)：一个顶层节点 ⇒ 标准 Markdown；source 块原样写。
  * - serializeSource(raw)：source 块原文。
+ * - listWriteOptions(previous, node, next?)：相邻列表换标记；listMarkerOf(text)：块文本的标记。
  *
  * 行为
  * - 只表达**语义**：不再保留源里的拼写（`-` / `*`、Setext、缩进代码、实体、转义）。
  *   未改的块根本不会走到这里（blockSave 从原文切片）；走到这里的块按标准写。
+ * - 相邻列表按前后块的实际标记避让：三张无序列表轮换 `-` / `*` / `+`，有序 `.` / `)`；
+ *   写出的标记不能与下一块原文相同，否则重解会并成一张。
  * - 文字节点的格式位折成 strong / emphasis / delete / inlineCode；不支持的格式（下划线、颜色）丢弃。
  * - 引用式链接 / 图片若在节点上带着引用式身份（`referenceForm.ts`），写回 `[...][label]` /
  *   `![...][label]`；没有身份才写成普通链接 / 图片。
@@ -91,21 +94,67 @@ export { serializeBlock, serializeRoot }
 export type { BlockWriteOptions }
 
 /**
- * 相邻两张同类列表要换一个标记，否则逐块写手写 `-` + `-`，重解会并成一张。
- * @param previous - 前一个内容块的列表类型。
+ * 一行文本开头的列表标记。
+ * @param line - 一行 Markdown（已去掉行尾）。
+ * @returns 无序的 `-` / `*` / `+`，有序的 `.` / `)`；不是列表项时 null。
+ */
+function markerInLine(line: string): string | null {
+  const bullet = /^ {0,3}([-*+])(?:[ \t]|$)/.exec(line)
+  if (bullet !== null) return bullet[1] ?? null
+  const ordered = /^ {0,3}\d{1,9}([.)])(?:[ \t]|$)/.exec(line)
+  return ordered === null ? null : ordered[1] ?? null
+}
+
+/**
+ * 一段块文本**最后一个顶层块**的列表标记。
+ *
+ * 与下一块相邻的是这段文本的最后一个块，不是第一个；source 块可以含多块，
+ * 所以先看首行、再按解析结果定位最后一块。
+ * @param text - 写出来或从原文切出来的块文本。
+ * @returns 列表标记；最后一个顶层块不是列表时 null。
+ */
+export function listMarkerOf(text: string): string | null {
+  const head = markerInLine(text.split('\n', 1)[0] ?? '')
+  if (head === null) return null
+  const parsed = parseBody(text)
+  const last = parsed.children[parsed.children.length - 1]
+  if (last === undefined || last.type !== 'list') return null
+  const start = last.position?.start.offset ?? 0
+  return markerInLine(text.slice(start).split('\n', 1)[0] ?? '')
+}
+
+/**
+ * 相邻列表要换一个标记，否则逐块写手写 `-` + `-`，重解会并成一张。
+ *
+ * **按上一块实际写出的标记**决定，不按列表类型：三张相邻的无序列表要轮换
+ * `-` → `*` → `+`，只按类型判会让第二、三张都写 `*` 并合并。
+ * 还要避开**下一块原文的标记**：下一块没改时按原文切片，写出来的这一块若与它同标记，
+ * 仍会合并（`- a` / `+ b` / `* c` 改中间一块）。三个无序标记总够避开前后两个；
+ * 有序只有 `.` / `)`，避不开时调用方要把下一块也重写（见 blockSave 的 forced）。
+ * @param previous - 上一块实际写出的列表标记（`-` / `*` / `+` / `.` / `)`）。
  * @param node - 当前节点。
+ * @param next - 下一块原文的列表标记；没有下一块或下一块不是列表时 null。
  * @returns 逐块写选项；不需要时 undefined。
  */
 export function listWriteOptions(
   previous: string | null,
   node: LexicalNode,
+  next: string | null = null,
 ): BlockWriteOptions | undefined {
   if (!$isListNode(node)) return undefined
-  const type = node.getListType()
-  if (previous !== type) return undefined
-  if (type === 'bullet') return { bullet: '*' }
-  if (type === 'number') return { bulletOrdered: ')' }
-  return undefined
+  const ordered = node.getListType() === 'number'
+  const previousOrdered = previous === '.' || previous === ')'
+  const nextOrdered = next === '.' || next === ')'
+  const candidates = ordered ? ['.', ')'] : ['-', '*', '+']
+  const differFromPrevious = (marker: string): boolean =>
+    previous === null || previousOrdered !== ordered || marker !== previous
+  const differFromNext = (marker: string): boolean =>
+    next === null || nextOrdered !== ordered || marker !== next
+  const choice =
+    candidates.find(marker => differFromPrevious(marker) && differFromNext(marker)) ??
+    candidates.find(marker => differFromPrevious(marker))
+  if (choice === undefined) return undefined
+  return ordered ? { bulletOrdered: choice as '.' | ')' } : { bullet: choice as '-' | '*' | '+' }
 }
 
 /**

@@ -14,6 +14,9 @@
  *   既省掉重新序列化，也不改变结果（probe-block 的“双跑”钉住这一点）。
  *   结构变化（有节点已经不在树里）时调用方传 `undefined`，整体重算。
  * - 相邻的、都没改的 base 块之间，复制原文里的间隔（空行、缩进）；否则用两个换行。
+ * - 第一个内容块前面的原文（frontmatter 后的空行等）不属于任何块：首块改了也照抄。
+ * - 相邻列表按**上一块实际写出的标记**换一个（三张无序列表要轮换 `-` / `*` / `+`）；
+ *   写出的标记若与下一块原文相同，下一块不能切片，必须重写它的标记（`forced`）。
  * - 原文里本来就有的空行由 base 块之间的间隔复制；用户新加的空段落按一个换行计入。
  * - 内容块全被删光（基线里原来有内容）⇒ 正文写空；本来就是空文档 / 只有空行 ⇒ 保留原文。
  * - 图片 / 分割线 / 表格 / 代码等块与段落同一规则；块内部不再做逐字符补丁。
@@ -33,12 +36,12 @@
  * - 改拼装规则：$saveBody。
  */
 import { $getRoot, type LexicalNode } from 'lexical'
-import { $isListNode } from '@lexical/list'
 import type { Content, Root } from 'mdast'
 import { $isEmptyParagraph } from './emptyParagraph'
 import { $isBlockBreakNode } from './blockBreak'
 import {
   serializeLexicalBlock,
+  listMarkerOf,
   listWriteOptions,
 } from './mdastLift'
 import { serializeBlock, type BlockWriteOptions } from './core/serialize'
@@ -104,19 +107,23 @@ export function $captureBase(source: string, parsed: Root = parseBody(source)): 
     .filter(node => !$isEmptyParagraph(node) && !$isBlockBreakNode(node))
   const spans = topLevelSpans(parsed.children, source)
   const count = Math.min(parsed.children.length, contentBlocks.length)
-  let previousListType: string | null = null
+  let previousMarker: string | null = null
   for (let index = 0; index < count; index += 1) {
     const node = contentBlocks[index]
     const span = spans[index]
     if (node === undefined || span === undefined) continue
+    const slice = source.slice(span.start, span.end)
+    const nextSpan = index + 1 < count ? spans[index + 1] : undefined
+    const nextMarker = nextSpan === undefined ? null : listMarkerOf(source.slice(nextSpan.start, nextSpan.end))
     blocks.push({
       key: node.getKey(),
       start: span.start,
       end: span.end,
-      written: writtenOf(node, listWriteOptions(previousListType, node)),
+      written: writtenOf(node, listWriteOptions(previousMarker, node, nextMarker)),
       index: blocks.length,
     })
-    previousListType = $isListNode(node) ? node.getListType() : null
+    // 下一块要避开的是**这一块在原文里的标记**（未改时原样切片）。
+    previousMarker = listMarkerOf(slice)
   }
   return blocks
 }
@@ -158,12 +165,28 @@ export function $saveBody(
   let lastEntry: BaseBlock | undefined
   let lastUnchanged = false
   let emitted = false
-  let previousListType: string | null = null
+  let previousMarker: string | null = null
+  /*
+   * 有序列表只有 `.` / `)` 两个标记。两块都重写时总能让前后不同；但当前块写出的标记
+   * 若与**下一块原文**相同，下一块就不能再切片（切开后仍会合并），必须重写它的标记。
+   */
+  const forced = new Set<string>()
 
   const push = (text: string): void => {
     if (text === '') return
     parts.push(text)
     length += text.length
+  }
+
+  /** 从 from 之后找下一个内容块（跳过空段落 / 分隔节点）。 */
+  const nextContentKey = (from: number): string | null => {
+    for (let cursor = from + 1; cursor <= last; cursor += 1) {
+      const candidate = children[cursor]
+      if (candidate === undefined) continue
+      if ($isEmptyParagraph(candidate) || $isBlockBreakNode(candidate)) continue
+      return candidate.getKey()
+    }
+    return null
   }
 
   for (let index = 0; index <= last; index += 1) {
@@ -178,14 +201,19 @@ export function $saveBody(
     }
 
     const entry = byKey.get(node.getKey())
+    const mustWrite = forced.has(node.getKey())
     /*
      * 没脏的块不重新序列化：它的 `written` 只可能等于基线里那一串，直接复用。
      * 脏块 / 新块现算一次——这一串同时是“判改”的判据和“写出”的内容，两者不会分家。
      */
-    const reusable = entry !== undefined && dirty !== undefined && !dirty.has(entry.key)
-    const options = listWriteOptions(previousListType, node)
+    const reusable = entry !== undefined && dirty !== undefined && !dirty.has(entry.key) && !mustWrite
+    const nextKey = nextContentKey(index)
+    const nextEntry = nextKey === null ? undefined : byKey.get(nextKey)
+    const nextMarker =
+      nextEntry === undefined ? null : listMarkerOf(source.slice(nextEntry.start, nextEntry.end))
+    const options = listWriteOptions(previousMarker, node, nextMarker)
     const written = reusable && entry !== undefined ? entry.written : writtenOf(node, options)
-    const unchanged = entry !== undefined && written === entry.written
+    const unchanged = entry !== undefined && written === entry.written && !mustWrite
     let text: string
     if (unchanged && entry !== undefined) {
       text = source.slice(entry.start, entry.end)
@@ -193,14 +221,16 @@ export function $saveBody(
       text = eol === '\n' ? written : written.replace(/\n/g, eol)
     }
     if (text === '') continue
-    previousListType = $isListNode(node) ? node.getListType() : null
+    // 下一块要避开的是**这一块实际写出的标记**（未改时是原文切片里的那个）。
+    previousMarker = listMarkerOf(text)
+    if (nextEntry !== undefined && previousMarker !== null && previousMarker === nextMarker) {
+      forced.add(nextEntry.key)
+    }
 
     if (!emitted) {
       // 第一个内容块还是原文第一个块：前面那点（frontmatter 后的空行等）照抄。
-      const prefix =
-        entry !== undefined && unchanged && entry.index === 0
-          ? source.slice(0, entry.start)
-          : ''
+      // 这一段不属于任何块，块改没改都要保留；否则改正文首块会吞掉 frontmatter 后的空行。
+      const prefix = entry !== undefined && entry.index === 0 ? source.slice(0, entry.start) : ''
       push(prefix)
       if (prefix !== '') pendingBlanks = Math.max(0, pendingBlanks - blankLinesIn(prefix))
       emitted = true

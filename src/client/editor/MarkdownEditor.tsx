@@ -263,6 +263,7 @@ function $dirtyTopLevelBlocks(elements: Iterable<string>, leaves: Iterable<strin
  */
 function EditorBridge({
   frontmatter,
+  bom,
   initialBody,
   sourceBase,
   initialBase,
@@ -271,6 +272,7 @@ function EditorBridge({
   onGone,
 }: {
   readonly frontmatter: string | null
+  readonly bom: string
   readonly initialBody: string
   readonly sourceBase: SourceBase
   readonly initialBase: MutableRefObject<BaseBlock[] | null>
@@ -283,6 +285,7 @@ function EditorBridge({
   const onReadyRef = useRef(onReady)
   const onGoneRef = useRef(onGone)
   const frontmatterRef = useRef(frontmatter)
+  const bomRef = useRef(bom)
   const sourceRef = useRef(initialBody)
   const initialBodyRef = useRef(initialBody)
   const sourceBaseRef = useRef(sourceBase)
@@ -292,6 +295,7 @@ function EditorBridge({
   onReadyRef.current = onReady
   onGoneRef.current = onGone
   frontmatterRef.current = frontmatter
+  bomRef.current = bom
 
   useEffect(() => {
     onReadyRef.current?.(editor)
@@ -376,7 +380,7 @@ function EditorBridge({
         // 这种更新不需要重新算正文：正文没变，`onChange` 把同一份交回去就够了（调用方比较后不动）。
         const changed = sourceEdit || dirtyElements.size > 0 || dirtyLeaves.size > 0
         if (!changed) {
-          onChangeRef.current(joinFrontmatter(frontmatterRef.current, sourceRef.current))
+          onChangeRef.current(joinFrontmatter(frontmatterRef.current, sourceRef.current, bomRef.current))
           return
         }
         const saved = editorState.read(() =>
@@ -392,7 +396,7 @@ function EditorBridge({
         sourceBaseRef.current.blocks = saved.blocks
         sourceBaseRef.current.source = saved.body
         if (saved.body !== sourceRef.current) sourceRef.current = saved.body
-        onChangeRef.current(joinFrontmatter(frontmatterRef.current, saved.body))
+        onChangeRef.current(joinFrontmatter(frontmatterRef.current, saved.body, bomRef.current))
       })
   }, [editor])
 
@@ -544,7 +548,7 @@ export function MarkdownEditor({
     if (measured !== null) onImportMsRef.current?.(measured)
   }, [])
 
-  const { frontmatter, body } = useMemo(() => splitFrontmatter(initialMarkdown), [initialMarkdown])
+  const { bom, frontmatter, body } = useMemo(() => splitFrontmatter(initialMarkdown), [initialMarkdown])
 
   const initialConfig = useMemo<InitialConfigType>(
     () => ({
@@ -682,6 +686,7 @@ export function MarkdownEditor({
           <EditableSyncPlugin editable={!readOnly} />
           <EditorBridge
             frontmatter={frontmatter}
+            bom={bom}
             initialBody={body}
             sourceBase={sourceBase}
             initialBase={initialBaseRef}

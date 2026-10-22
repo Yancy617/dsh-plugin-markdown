@@ -33,7 +33,7 @@ import { $ensureTrailingParagraph } from './trailingParagraph'
 import { $isEmptyParagraph } from './emptyParagraph'
 import { lowerDocument } from './mdastLower'
 import { projectDocumentNodes } from './projection'
-import { listWriteOptions, serializeLexicalBlock } from './mdastLift'
+import { listMarkerOf, listWriteOptions, serializeLexicalBlock } from './mdastLift'
 import { parseBody } from './core/mdastParse'
 import { $captureBase } from './blockSave'
 import { $createBlockBreakNode, $isBlockBreakNode } from './blockBreak'
@@ -102,11 +102,12 @@ export function $pastedMarkdownNodes(text: string): LexicalNode[] {
 export function serializeDocumentMarkdown(root?: ElementNode): string {
   const container = root ?? $getRoot()
   const blocks: string[] = []
-  let previousListType: string | null = null
+  let previousMarker: string | null = null
   for (const child of container.getChildren()) {
     if ($isEmptyParagraph(child) || $isBlockBreakNode(child)) continue
-    blocks.push(serializeLexicalBlock(child, listWriteOptions(previousListType, child)))
-    previousListType = $isListNode(child) ? child.getListType() : null
+    const written = serializeLexicalBlock(child, listWriteOptions(previousMarker, child))
+    blocks.push(written)
+    previousMarker = listMarkerOf(written)
   }
   return blocks.join('\n\n')
 }
